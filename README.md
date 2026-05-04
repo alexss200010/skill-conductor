@@ -4,16 +4,19 @@ Architecture-first skill lifecycle: design → build → test → evaluate → p
 
 Most skill tools jump straight to "write SKILL.md." Conductor makes you choose the architecture first - because rewriting a wrong pattern costs more than writing it right.
 
-## v3: SOP practices + smoke tests
+<details>
+<summary><strong>v3: SOP practices + smoke tests</strong></summary>
 
-**New in v3:**
 - **`references/sop-practices.md`** — 80 years of Standard Operating Procedure wisdom applied to skill authoring. Inline checklists at risk-points, pre-flight checks, programmatic validation, exception handling patterns. Use for procedural skills (client intake, onboarding, reporting, escalation)
 - **`scripts/test_smoke.py`** — fast safety net for skill-conductor scripts themselves. Verifies critical scripts execute on known-good skills, fail on known-bad, produce expected output shapes. Run: `uv run scripts/test_smoke.py`
 - Updated eval agents (grader, comparator, analyzer) with refined rubrics
 - Improved `package_skill.py`, `eval_skill.py`, and schema validation
 - Updated `patterns.md` and `schemas.md` with tighter definitions
 
-## v2: Anthropic's eval engine meets architecture-first design
+</details>
+
+<details>
+<summary><strong>v2: Anthropic's eval engine meets architecture-first design</strong></summary>
 
 Anthropic [updated their skill-creator](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills) with serious eval infrastructure. We took the best of it:
 
@@ -30,6 +33,8 @@ Anthropic [updated their skill-creator](https://claude.com/blog/improving-skill-
 - **TDD RED before writing.** Verify the agent fails WITHOUT the skill first. If it already handles the task - you don't need a skill. Creator runs baselines in parallel with skill runs. Conductor runs baseline BEFORE you write anything
 - **5-axis scoring with thresholds.** Discovery, Clarity, Efficiency, Robustness, Completeness. Each 1-10. Score 45-50 = production. Below 25 = rewrite. Not "vibe check" - numbers
 - **Skill categorization.** Capability uplift (teaching something new) vs Encoded preference (sequencing known abilities). Different skills need different testing strategies
+
+</details>
 
 ## Synthesized from
 
