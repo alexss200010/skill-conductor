@@ -15,9 +15,38 @@ Full lifecycle management for agent skills: **draft → test → review → impr
 
 One skill to rule them all — from architecture to packaging. The core loop is always the same: write something, test it, see what fails, fix it, test again.
 
+## Runtime requirements (pre-flight)
+
+Run this block before any mode that touches scripts (CREATE, IMPROVE, VALIDATE, OPTIMIZE, PACKAGE):
+
+```bash
+# 1. uv (used by every script in scripts/ and eval-viewer/)
+command -v uv >/dev/null || command -v /home/shima/.local/bin/uv >/dev/null \
+  || { echo "FAIL: uv not found. Install via curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
+
+# 2. SKILL_CONDUCTOR_DIR — absolute path to this skill (scripts use relative imports)
+SKILL_CONDUCTOR_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo ~/.zeroclaw/workspace/skills/skill-conductor)"
+
+# 3. UV_BIN — full path so subprocess and shell tool both work
+UV_BIN="$(command -v uv || echo /home/shima/.local/bin/uv)"
+
+# 4. Optional: claude CLI (only Mode 5 OPTIMIZE)
+command -v claude >/dev/null || echo "WARN: claude CLI absent — Mode 5 OPTIMIZE will fail"
+```
+
+If `uv` is absent, stop and tell the user. Don't try to fall back to `python3` directly — scripts have inline dependencies (`# /// script` blocks) that require `uv run`.
+
+For Mode 1 Step 6 (eval loop) and Mode 2 (improve), the executor subagent needs LLM access. Three options, in order of preference:
+
+1. `claude` CLI logged in (`claude /login` or `ANTHROPIC_API_KEY` in env). Verify: `claude --print --model claude-sonnet-4-5 "say ok"` returns `ok`.
+2. Anthropic SDK directly via `uv run --with anthropic ...` if `ANTHROPIC_API_KEY` is set.
+3. On hosts with neither (e.g. zeroclaw with OAuth-only Claude), evals can only be run by the orchestrating agent itself — there's no separate subagent. Mode 1 Step 6 then degrades to: write evals, the user runs them via their own agent, paste outputs back here.
+
+Check the environment up front and tell the user which path applies. Don't pretend to spawn subagents that can't authenticate.
+
 ## How to communicate
 
-Read context cues. If the user is a skill author iterating on their own work, be direct and technical. If they're new to skills, explain the *why* behind each step — not just what to do, but why it matters. Default to conversational, not robotic.
+Read context cues. If the user is a skill author iterating on their own work, be direct and technical. If they're new to skills, explain the _why_ behind each step — not just what to do, but why it matters. Default to conversational, not robotic.
 
 - Explain trade-offs when there's a real choice to make
 - Use concrete examples over abstract rules
@@ -28,14 +57,14 @@ Read context cues. If the user is a skill author iterating on their own work, be
 
 Detect mode from context. If ambiguous, ask.
 
-| Mode | When | What happens |
-|------|------|-------------|
-| 1. CREATE | "build a skill", "new skill for..." | Full lifecycle: intent → architecture → scaffold → write → test |
-| 2. IMPROVE | "fix this skill", "it doesn't trigger" | Diagnose → eval loop → blind comparison → iterate |
-| 3. VALIDATE | "test this skill", "run evals" | Structural checks + trigger testing + 5-axis scoring |
-| 4. REVIEW | "review this skill", third-party assessment | 11-point quality gate, quick and focused |
-| 5. OPTIMIZE | "improve triggering", "description optimization" | Automated description optimization with train/test split |
-| 6. PACKAGE | "package for distribution" | Validate + bundle into .skill file |
+| Mode        | When                                             | What happens                                                    |
+| ----------- | ------------------------------------------------ | --------------------------------------------------------------- |
+| 1. CREATE   | "build a skill", "new skill for..."              | Full lifecycle: intent → architecture → scaffold → write → test |
+| 2. IMPROVE  | "fix this skill", "it doesn't trigger"           | Diagnose → eval loop → blind comparison → iterate               |
+| 3. VALIDATE | "test this skill", "run evals"                   | Structural checks + trigger testing + 5-axis scoring            |
+| 4. REVIEW   | "review this skill", third-party assessment      | 11-point quality gate, quick and focused                        |
+| 5. OPTIMIZE | "improve triggering", "description optimization" | Automated description optimization with train/test split        |
+| 6. PACKAGE  | "package for distribution"                       | Validate + bundle into .skill file                              |
 
 ---
 
@@ -46,11 +75,12 @@ Detect mode from context. If ambiguous, ask.
 Before writing anything, extract 2–3 concrete scenarios.
 
 Ask:
+
 - "What specific task should this skill handle?"
 - "What would a user say to trigger it?"
 - "What should NOT trigger it?"
 
-Don't move on until you have a clear picture of what the skill does, for whom, and when. This prevents the most common failure: a skill that does *something* but triggers for the wrong things.
+Don't move on until you have a clear picture of what the skill does, for whom, and when. This prevents the most common failure: a skill that does _something_ but triggers for the wrong things.
 
 ### Step 2: Baseline (TDD RED)
 
@@ -66,21 +96,23 @@ If the agent already handles it perfectly, the skill is unnecessary. This sounds
 
 Choose a primary pattern from `references/patterns.md` (can combine):
 
-| Pattern | Use when |
-|---------|----------|
-| Sequential workflow | clear step-by-step process |
-| Iterative refinement | output improves with cycles |
-| Context-aware selection | same goal, different tools by context |
-| Domain intelligence | specialized knowledge beyond tool access |
-| Multi-MCP coordination | workflow spans multiple services |
+| Pattern                 | Use when                                 |
+| ----------------------- | ---------------------------------------- |
+| Sequential workflow     | clear step-by-step process               |
+| Iterative refinement    | output improves with cycles              |
+| Context-aware selection | same goal, different tools by context    |
+| Domain intelligence     | specialized knowledge beyond tool access |
+| Multi-MCP coordination  | workflow spans multiple services         |
 
 Choose degrees of freedom — this determines how much control vs. flexibility the skill gives the agent:
 
-| Freedom | When | Example |
-|---------|------|---------|
-| Low (scripts) | fragile, error-prone, must be exact | PDF rotation, API calls |
-| Medium (pseudocode) | preferred pattern exists, some variation ok | data processing |
-| High (text) | multiple valid approaches, judgment needed | design decisions |
+| Freedom             | When                                        | Example                 |
+| ------------------- | ------------------------------------------- | ----------------------- |
+| Low (scripts)       | fragile, error-prone, must be exact         | PDF rotation, API calls |
+| Medium (pseudocode) | preferred pattern exists, some variation ok | data processing         |
+| High (text)         | multiple valid approaches, judgment needed  | design decisions        |
+
+**Если скил процедурный** (бизнес-процесс с цепочкой действий и решениями: обработка заявки, создание КП, обработка счёта, онбординг, эскалация инцидента) — прочитай `references/sop-practices.md`. Там 8 принципов из 80-летней SOP-традиции (армия США → авиация → McDonald's): TWI-структура шагов, inline-чеклисты, 5 Why, выбор формата (simple/hierarchical/flowchart), запреты на модальные слова. Это сильно меняет как пишется SKILL.md для процедурных задач.
 
 ### Step 4: Scaffold
 
@@ -89,6 +121,7 @@ uv run scripts/init_skill.py <skill-name> --path <output-dir> [--resources scrip
 ```
 
 Or create manually:
+
 ```
 skill-name/
 ├── SKILL.md          # required — the brain
@@ -115,7 +148,7 @@ The description is the single most important line. It determines whether the ski
 - `name`: lowercase, digits, hyphens only. No consecutive hyphens. Matches folder name. Max 64 chars
 - `description`: max 1024 chars. No angle brackets. No process/workflow steps
 - Start with purpose, then "Use when...", then "Do NOT use for..."
-- **NEVER put workflow in description** — tested: agent follows description instead of reading body
+- **Don't put workflow in the description** — tested: when the description lists process steps, the agent follows it and skips the body entirely
 
 ```yaml
 # GOOD: purpose + triggers, no process
@@ -131,17 +164,21 @@ description: Exports Figma assets, generates specs, creates Linear tasks, posts 
 # Skill Name
 
 ## Overview
+
 What this enables. 1-2 sentences. Core principle.
 
 ## [Main sections]
+
 Step-by-step with numbered sequences.
 Concrete templates over prose.
 Imperative voice throughout.
 
 ## Common Mistakes
+
 What goes wrong + how to fix.
 
 ## Troubleshooting (if applicable)
+
 Error: [message] → Cause: [why] → Fix: [how]
 ```
 
@@ -152,25 +189,43 @@ Error: [message] → Cause: [why] → Fix: [how]
 - **Token budget.** Frequently loaded: <200 words. Standard: <500 lines. Heavy: move to references/
 - **No junk files.** No README, CHANGELOG inside the skill
 - **Scripts:** bundle when same code rewritten repeatedly, or operation is fragile. Must return descriptive stdout/stderr on failure
+- **Imperative voice.** Use "Extract the data", not "you should extract" or capitalized "MUST/NEVER" — explanation > rule (see `references/sop-practices.md` Principle 2)
 
 ### Step 6: Test Cases & Eval Loop
 
-Create test cases in `evals/evals.json` (see `references/schemas.md` for format):
+This is the critical step — most failures hide here. Treat it as three sub-phases.
 
-1. Write 3–5 eval prompts covering core use cases
-2. For each, define expectations (verifiable statements about the output)
-3. Start without assertions — run first, observe, then write assertions based on what good output looks like
+#### 6a. Pre-flight (before spawning anything)
 
-To run the eval loop:
+- [ ] `evals/evals.json` exists with 3–5 prompts (see `references/schemas.md`)
+- [ ] Workspace dir created: `<skill-name>-workspace/iteration-1/`
+- [ ] Each eval has a descriptive name (not just `eval-0`) and `eval_metadata.json`
+- [ ] Anthropic key for executor subagents is set
+- [ ] `uv` and `eval-viewer/generate_review.py` are reachable from current working dir
 
-1. Spawn executor subagent with the skill active, using the eval prompt
-2. Spawn a baseline run in parallel (same prompt, no skill) — for comparison
-3. While runs execute, draft assertions based on expected behavior
-4. When runs complete, save timing data from task notifications
-5. Grade outputs using `agents/grader.md`
-6. Launch eval viewer: `uv run eval-viewer/generate_review.py <workspace>`
-   - **Headless/Cowork:** use `--static <output.html>` instead of live server. ALWAYS show viewer to user BEFORE editing skill yourself
-7. Review outputs, write feedback, iterate on the skill
+If any item fails — fix before proceeding. A missing workspace dir mid-run loses outputs.
+
+#### 6b. Run loop (do all in one turn)
+
+| What | Key move | Why |
+|---|---|---|
+| Spawn with-skill runs | One subagent per eval, skill active, save outputs to `iteration-N/<eval-name>/with_skill/` | Parallel = same wall time as one run |
+| Spawn baseline runs in the same turn | Same prompt, no skill (or old version snapshot for IMPROVE), save to `without_skill/` or `old_skill/` | If you wait, baselines drift in time and aren't comparable |
+| Draft assertions while runs execute | Pull verifiable statements from eval prompts | Don't waste the 5–15 min of subagent time |
+| Capture timing on each notification | Save `total_tokens`, `duration_ms` to `timing.json` immediately | Notification is the only source — process per-arrival, don't batch |
+
+#### 6c. Post-run checklist
+
+- [ ] All `timing.json` files written (one per run)
+- [ ] Each run has a `grading.json` with fields `text`, `passed`, `evidence` (not `name`/`met`)
+- [ ] `benchmark.json` aggregated: `uv run scripts/aggregate_benchmark.py <workspace>/iteration-N --skill-name <name>`
+- [ ] Analyst pass done — see `agents/analyzer.md` for what to look for (non-discriminating assertions, high-variance evals, time/token tradeoffs)
+- [ ] Eval viewer launched: `uv run eval-viewer/generate_review.py <workspace> --skill-name <name> --benchmark <path>`
+  - In headless mode: `--static <output.html>` and send file to user
+  - For iteration 2+: add `--previous-workspace <previous-iteration-path>`
+- [ ] User saw the viewer **before** I started editing the skill
+
+The last bullet is the trap. If you skip user review and "improve" based on your own reading of outputs, you optimize against your taste, not the user's.
 
 ### Step 7: Verify & Refactor
 
@@ -189,13 +244,13 @@ If any fail → iterate. Find how the agent rationalizes around the skill, plug 
 
 Read the existing SKILL.md completely. Identify the problem class:
 
-| Problem | Signal | Fix |
-|---------|--------|-----|
-| Undertriggering | skill doesn't load | add keywords, trigger phrases, file types to description |
-| Overtriggering | loads for unrelated queries | add negative triggers, be more specific |
-| Skips body | follows description only | remove process/workflow from description |
-| Inconsistent output | varies across sessions | add explicit templates, reduce freedom, add scripts |
-| Too slow | large context | move detail to references/, cut body to <500 lines |
+| Problem             | Signal                      | Fix                                                      |
+| ------------------- | --------------------------- | -------------------------------------------------------- |
+| Undertriggering     | skill doesn't load          | add keywords, trigger phrases, file types to description |
+| Overtriggering      | loads for unrelated queries | add negative triggers, be more specific                  |
+| Skips body          | follows description only    | remove process/workflow from description                 |
+| Inconsistent output | varies across sessions      | add explicit templates, reduce freedom, add scripts      |
+| Too slow            | large context               | move detail to references/, cut body to <500 lines       |
 
 ### Improvement mindset
 
@@ -203,6 +258,7 @@ Read the existing SKILL.md completely. Identify the problem class:
 2. **Keep the prompt lean.** Read transcripts, not just outputs. If the skill makes the model waste time on unproductive steps, remove those instructions and see what happens
 3. **Explain the why.** LLMs have good theory of mind. Instead of ALWAYS/NEVER in caps, explain the reasoning — it's more powerful and robust. If you're writing rigid rules, reframe as explanations
 4. **Look for repeated work.** If all test runs independently write the same helper script, bundle it in `scripts/`. Saves every future invocation from reinventing the wheel
+5. **For procedural skills - apply SOP practices.** If improving a process skill (handling a ticket, generating a quote, escalating an incident), read `references/sop-practices.md`. The 8 principles from SOP tradition (TWI step structure, inline checklists, 5 Why, removing modal weasel words like "regularly/typically/как правило") map directly to skill failure modes — silent improvisation, missed edge cases, agents skipping checklists at end of doc
 
 ### Step 2: Eval Iteration Loop
 
@@ -244,12 +300,14 @@ Checks: frontmatter, naming, description quality, process leak detection, body s
 ### Stage 2: Discovery (trigger testing)
 
 Generate 6 test prompts:
+
 - 3 that SHOULD trigger the skill
 - 3 that should NOT (similar-sounding but wrong domain)
 
 Run each in clean session. Target: 6/6 correct.
 
 For automated trigger testing at scale, use:
+
 ```bash
 uv run scripts/run_eval.py --eval-set <path> --skill-path <path> --runs-per-query 3
 ```
@@ -258,13 +316,13 @@ uv run scripts/run_eval.py --eval-set <path> --skill-path <path> --runs-per-quer
 
 Rate on 5 axes (1–10 each):
 
-| Axis | What it measures |
-|------|-----------------|
-| Discovery | triggers correctly, doesn't false-trigger |
-| Clarity | instructions unambiguous, no guessing needed |
-| Efficiency | token budget respected, progressive disclosure used |
-| Robustness | handles edge cases, scripts have error handling |
-| Completeness | covers the stated use cases fully |
+| Axis         | What it measures                                    |
+| ------------ | --------------------------------------------------- |
+| Discovery    | triggers correctly, doesn't false-trigger           |
+| Clarity      | instructions unambiguous, no guessing needed        |
+| Efficiency   | token budget respected, progressive disclosure used |
+| Robustness   | handles edge cases, scripts have error handling     |
+| Completeness | covers the stated use cases fully                   |
 
 **Interpretation:** 45–50 production ready · 35–44 solid · 25–34 needs work · <25 rewrite
 
@@ -328,6 +386,7 @@ uv run scripts/run_loop.py \
 ```
 
 The loop:
+
 - Splits queries into train (60%) and test (40%) to prevent overfitting
 - Each iteration: evaluates current description → Claude proposes improvement → re-evaluates
 - Improvement model sees only train results (blinded to test)
@@ -336,12 +395,12 @@ The loop:
 
 ### Supporting scripts
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/run_eval.py` | Run trigger evaluation on a description |
-| `scripts/improve_description.py` | Claude proposes improved description |
-| `scripts/generate_report.py` | HTML visualization of optimization history |
-| `scripts/aggregate_benchmark.py` | Statistical aggregation of benchmark runs |
+| Script                           | Purpose                                    |
+| -------------------------------- | ------------------------------------------ |
+| `scripts/run_eval.py`            | Run trigger evaluation on a description    |
+| `scripts/improve_description.py` | Claude proposes improved description       |
+| `scripts/generate_report.py`     | HTML visualization of optimization history |
+| `scripts/aggregate_benchmark.py` | Statistical aggregation of benchmark runs  |
 
 ---
 
@@ -371,23 +430,24 @@ Creates `skill-name.skill` (zip with .skill extension). Verify: unzip in temp di
 1. **Document/Asset Creation** — consistent output (docs, designs, code)
 2. **Workflow Automation** — multi-step processes with methodology
 3. **MCP Enhancement** — workflow guidance on top of tool access
+4. **Procedural / Process** — business procedures with decision points and exceptions (handling a request, generating a quote, processing an invoice, onboarding, escalation). For these → read `references/sop-practices.md`
 
 ### File purposes
 
-| Directory | Loaded? | Purpose |
-|-----------|---------|---------|
-| SKILL.md | on trigger | brain — instructions |
-| references/ | on demand | detailed docs, schemas |
-| scripts/ | executed, not loaded | deterministic operations |
-| assets/ | never loaded | templates, images |
+| Directory   | Loaded?              | Purpose                  |
+| ----------- | -------------------- | ------------------------ |
+| SKILL.md    | on trigger           | brain — instructions     |
+| references/ | on demand            | detailed docs, schemas   |
+| scripts/    | executed, not loaded | deterministic operations |
+| assets/     | never loaded         | templates, images        |
 
 ### Progressive disclosure budget
 
-| Level | When loaded | Budget |
-|-------|-------------|--------|
-| Frontmatter | always (system prompt) | ~100 words |
-| SKILL.md body | on trigger | <500 lines |
-| Bundled resources | on demand | unlimited |
+| Level             | When loaded            | Budget     |
+| ----------------- | ---------------------- | ---------- |
+| Frontmatter       | always (system prompt) | ~100 words |
+| SKILL.md body     | on trigger             | <500 lines |
+| Bundled resources | on demand              | unlimited  |
 
 ### Description formula
 
@@ -397,22 +457,24 @@ Creates `skill-name.skill` (zip with .skill extension). Verify: unzip in temp di
 
 ## Reference Files
 
-| Path | What's inside |
-|------|--------------|
-| `agents/grader.md` | Evidence-based assertion grading |
-| `agents/comparator.md` | Blind A/B output comparison |
-| `agents/analyzer.md` | Post-hoc analysis + benchmark notes |
-| `references/patterns.md` | 5 architectural patterns + anti-patterns |
-| `references/schemas.md` | JSON schemas for evals, grading, benchmark |
-| `eval-viewer/` | Interactive HTML viewer for eval results |
-| `assets/eval_review.html` | Trigger eval set editor |
-| `scripts/eval_skill.py` | Structural validation (10-point scoring) |
-| `scripts/init_skill.py` | Skill scaffolder |
-| `scripts/run_eval.py` | Trigger evaluation runner |
-| `scripts/run_loop.py` | Eval + improve optimization loop |
-| `scripts/improve_description.py` | Claude-powered description improvement |
-| `scripts/aggregate_benchmark.py` | Benchmark statistics aggregator |
-| `scripts/generate_report.py` | HTML report generator |
-| `scripts/quick_validate.py` | Quick validation for packager |
-| `scripts/package_skill.py` | Skill → .skill packager |
-| `scripts/utils.py` | Shared utilities (parse_skill_md) |
+| Path                             | What's inside                              |
+| -------------------------------- | ------------------------------------------ |
+| `agents/grader.md`               | Evidence-based assertion grading           |
+| `agents/comparator.md`           | Blind A/B output comparison                |
+| `agents/analyzer.md`             | Post-hoc analysis + benchmark notes        |
+| `references/patterns.md`         | 5 architectural patterns + anti-patterns   |
+| `references/schemas.md`          | JSON schemas for evals, grading, benchmark |
+| `references/sop-practices.md`    | 8 SOP principles for procedural skills (TWI, 5 Why, format selection, modal weasel words) |
+| `eval-viewer/`                   | Interactive HTML viewer for eval results   |
+| `assets/eval_review.html`        | Trigger eval set editor                    |
+| `scripts/eval_skill.py`          | Structural validation (10-point scoring)   |
+| `scripts/init_skill.py`          | Skill scaffolder                           |
+| `scripts/run_eval.py`            | Trigger evaluation runner                  |
+| `scripts/run_loop.py`            | Eval + improve optimization loop           |
+| `scripts/improve_description.py` | Claude-powered description improvement     |
+| `scripts/aggregate_benchmark.py` | Benchmark statistics aggregator            |
+| `scripts/generate_report.py`     | HTML report generator                      |
+| `scripts/quick_validate.py`      | Quick validation for packager              |
+| `scripts/test_smoke.py`          | Smoke tests for all scripts (9 tests)      |
+| `scripts/package_skill.py`       | Skill → .skill packager                    |
+| `scripts/utils.py`               | Shared utilities (parse_skill_md)          |

@@ -10,12 +10,15 @@ Five reusable patterns. Most skills use one as primary and borrow elements from 
 
 ```markdown
 ## Step 1: [Action]
+
 Call tool/script. Expected output: [describe success].
 
 ## Step 2: [Action]
+
 Depends on Step 1 output. If [condition], skip to Step 3.
 
 ## Step 3: [Action]
+
 Validate result. On failure: [rollback instructions].
 ```
 
@@ -29,15 +32,19 @@ Validate result. On failure: [rollback instructions].
 
 ```markdown
 ## Draft
+
 Generate initial output.
 
 ## Quality Check
+
 Run `scripts/validate.py`. Criteria:
+
 - [ ] Required sections present
 - [ ] Data validated
 - [ ] Formatting consistent
 
 ## Refine
+
 Address each issue. Re-validate. Repeat until all criteria pass.
 Max iterations: 3. If still failing, report issues to user.
 ```
@@ -52,11 +59,13 @@ Max iterations: 3. If still failing, report issues to user.
 
 ```markdown
 ## Decision Tree
+
 - If [condition A]: use approach X (see references/approach-x.md)
 - If [condition B]: use approach Y
 - Default: use approach Z
 
 ## Execute
+
 Follow selected approach. Explain choice to user.
 ```
 
@@ -70,15 +79,19 @@ Follow selected approach. Explain choice to user.
 
 ```markdown
 ## Pre-check
+
 Apply domain rules before acting:
+
 - Rule 1: [check]
 - Rule 2: [check]
-If any fail: flag for review, do NOT proceed.
+  If any fail: flag for review, do NOT proceed.
 
 ## Execute
+
 Only if pre-check passed.
 
 ## Audit Trail
+
 Log all decisions and checks.
 ```
 
@@ -92,13 +105,16 @@ Log all decisions and checks.
 
 ```markdown
 ## Phase 1: [Service A]
+
 Fetch/create in Service A. Store result.
 
 ## Phase 2: [Service B]
+
 Use Service A output. Create in Service B.
 Validate before proceeding.
 
 ## Phase 3: [Notification]
+
 Notify relevant channels with summary.
 ```
 
@@ -110,10 +126,10 @@ Notify relevant channels with summary.
 
 These are the failure modes that actually happen in practice. If you see them in a skill, fix them.
 
-| Anti-pattern | Why it fails | Fix |
-|-------------|-------------|-----|
-| **Wall of text** | Agent skims paragraphs, misses critical detail | Break into numbered steps with clear actions |
-| **Assumed context** | "Use the standard approach" — standard to whom? | Define every term, link every reference |
-| **Synonym cycling** | template/boilerplate/scaffold for same concept | Pick one term, use it everywhere |
-| **Hidden prerequisites** | Required tools/envs not mentioned until step 5 | List all prerequisites upfront |
+| Anti-pattern              | Why it fails                                        | Fix                                                |
+| ------------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| **Wall of text**          | Agent skims paragraphs, misses critical detail      | Break into numbered steps with clear actions       |
+| **Assumed context**       | "Use the standard approach" — standard to whom?     | Define every term, link every reference            |
+| **Synonym cycling**       | template/boilerplate/scaffold for same concept      | Pick one term, use it everywhere                   |
+| **Hidden prerequisites**  | Required tools/envs not mentioned until step 5      | List all prerequisites upfront                     |
 | **Description as manual** | Workflow in description → agent skips body entirely | Description = triggers only. Process lives in body |

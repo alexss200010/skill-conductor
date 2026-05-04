@@ -4,6 +4,15 @@ Architecture-first skill lifecycle: design → build → test → evaluate → p
 
 Most skill tools jump straight to "write SKILL.md." Conductor makes you choose the architecture first - because rewriting a wrong pattern costs more than writing it right.
 
+## v3: SOP practices + smoke tests
+
+**New in v3:**
+- **`references/sop-practices.md`** — 80 years of Standard Operating Procedure wisdom applied to skill authoring. Inline checklists at risk-points, pre-flight checks, programmatic validation, exception handling patterns. Use for procedural skills (client intake, onboarding, reporting, escalation)
+- **`scripts/test_smoke.py`** — fast safety net for skill-conductor scripts themselves. Verifies critical scripts execute on known-good skills, fail on known-bad, produce expected output shapes. Run: `uv run scripts/test_smoke.py`
+- Updated eval agents (grader, comparator, analyzer) with refined rubrics
+- Improved `package_skill.py`, `eval_skill.py`, and schema validation
+- Updated `patterns.md` and `schemas.md` with tighter definitions
+
 ## v2: Anthropic's eval engine meets architecture-first design
 
 Anthropic [updated their skill-creator](https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills) with serious eval infrastructure. We took the best of it:
@@ -90,7 +99,8 @@ skills/
     │   └── viewer.html
     ├── references/
     │   ├── patterns.md
-    │   └── schemas.md
+    │   ├── schemas.md
+    │   └── sop-practices.md
     ├── assets/
     │   └── eval_review.html
     └── scripts/
@@ -103,6 +113,7 @@ skills/
         ├── generate_report.py
         ├── package_skill.py
         ├── quick_validate.py
+        ├── test_smoke.py
         └── utils.py
 ```
 
