@@ -25,7 +25,7 @@ npx skills add smixs/skill-conductor
 ```
 
 <details>
-<summary><strong>v1.0.0 — BinEval scoring, English canon, dual-channel install</strong></summary>
+<summary><strong>v3.0.0 — BinEval scoring, English canon, dual-channel install</strong></summary>
 
 - **BinEval evaluation** — replaces the old 5-axis 1-10 scoring with atomic binary yes/no questions across 5 dimensions (Discovery, Clarity, Structure, Robustness, Completeness). Each answer carries grounding evidence; the pass criterion is a **gate on critical questions**, not an opaque number. Adapted from *"Ask, Don't Judge"* ([arXiv 2606.27226](https://arxiv.org/abs/2606.27226)).
 - **Deterministic + LLM split** — `eval_skill.py --json` emits structural checks as binary question records; an evaluator agent answers the judgment questions with evidence and a self-update loop feeds failing questions back into edits.
