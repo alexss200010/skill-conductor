@@ -73,6 +73,16 @@ Anthropic [updated their skill-creator](https://claude.com/blog/improving-skill-
 3. **[Superpowers / writing-skills](https://github.com/obra/superpowers/blob/main/skills/writing-skills/SKILL.md)** by Jesse Vincent — TDD approach, the "description trap" discovery
 4. **[Skills Best Practices](https://github.com/mgechev/skills-best-practices)** by Minko Gechev — three-stage LLM validation, eval methodology
 
+### Methodology foundations
+
+The 9 authoring principles and the BinEval scoring draw on established procedure-writing and evaluation research:
+
+- **[Standard Operating Procedures: A Writing Guide](https://extension.psu.edu/standard-operating-procedures-a-writing-guide)** — Richard Stup, Penn State Extension. Format selection, hierarchical vs. flowchart procedures.
+- **Procedure Writing: Principles and Practices** — Wieringa, Moore & Barnes (Battelle Press, 1998). Imperative steps, removing modal weasel-words.
+- **Toyota TWI (Training Within Industry)** — the "Job Instruction" method: step → key point → why; the 5 Whys root-cause practice.
+- **McDonald's Operations Manual** — the canonical 600+ page SOP system; checklists at the point of use.
+- **[Ask, Don't Judge: Binary Questions for Interpretable LLM Evaluation and Self-Improvement](https://arxiv.org/abs/2606.27226)** — the BinEval method behind Conductor's evaluation.
+
 ## 6 Modes
 
 | Mode | What it does |
