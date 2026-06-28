@@ -17,32 +17,7 @@ One skill to rule them all — from architecture to packaging. The core loop is 
 
 ## Runtime requirements (pre-flight)
 
-Run this block before any mode that touches scripts (CREATE, IMPROVE, VALIDATE, OPTIMIZE, PACKAGE):
-
-```bash
-# 1. uv (used by every script in scripts/ and eval-viewer/)
-command -v uv >/dev/null || command -v /home/shima/.local/bin/uv >/dev/null \
-  || { echo "FAIL: uv not found. Install via curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
-
-# 2. SKILL_CONDUCTOR_DIR — absolute path to this skill (scripts use relative imports)
-SKILL_CONDUCTOR_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo ~/.zeroclaw/workspace/skills/skill-conductor)"
-
-# 3. UV_BIN — full path so subprocess and shell tool both work
-UV_BIN="$(command -v uv || echo /home/shima/.local/bin/uv)"
-
-# 4. Optional: claude CLI (only Mode 5 OPTIMIZE)
-command -v claude >/dev/null || echo "WARN: claude CLI absent — Mode 5 OPTIMIZE will fail"
-```
-
-If `uv` is absent, stop and tell the user. Don't try to fall back to `python3` directly — scripts have inline dependencies (`# /// script` blocks) that require `uv run`.
-
-For Mode 1 Step 6 (eval loop) and Mode 2 (improve), the executor subagent needs LLM access. Three options, in order of preference:
-
-1. `claude` CLI logged in (`claude /login` or `ANTHROPIC_API_KEY` in env). Verify: `claude --print --model claude-sonnet-4-5 "say ok"` returns `ok`.
-2. Anthropic SDK directly via `uv run --with anthropic ...` if `ANTHROPIC_API_KEY` is set.
-3. On hosts with neither (e.g. zeroclaw with OAuth-only Claude), evals can only be run by the orchestrating agent itself — there's no separate subagent. Mode 1 Step 6 then degrades to: write evals, the user runs them via their own agent, paste outputs back here.
-
-Check the environment up front and tell the user which path applies. Don't pretend to spawn subagents that can't authenticate.
+Before any mode that touches scripts (CREATE, IMPROVE, VALIDATE, OPTIMIZE, PACKAGE), run the pre-flight block → **`references/runtime-setup.md`** (checks `uv`, sets `UV_BIN`/`SKILL_CONDUCTOR_DIR`, verifies LLM access). If `uv` is absent, stop and tell the user.
 
 ## How to communicate
 
@@ -60,8 +35,8 @@ Detect mode from context. If ambiguous, ask.
 | Mode        | When                                             | What happens                                                    |
 | ----------- | ------------------------------------------------ | --------------------------------------------------------------- |
 | 1. CREATE   | "build a skill", "new skill for..."              | Full lifecycle: intent → architecture → scaffold → write → test |
-| 2. IMPROVE  | "fix this skill", "it doesn't trigger"           | Diagnose → eval loop → blind comparison → iterate               |
-| 3. VALIDATE | "test this skill", "run evals"                   | Structural checks + trigger testing + 5-axis scoring            |
+| 2. IMPROVE  | "fix this skill", "it doesn't trigger"           | Diagnose → eval loop → self-update loop → iterate               |
+| 3. VALIDATE | "test this skill", "run evals"                   | Structural checks + trigger testing + BinEval scoring           |
 | 4. REVIEW   | "review this skill", third-party assessment      | 11-point quality gate, quick and focused                        |
 | 5. OPTIMIZE | "improve triggering", "description optimization" | Automated description optimization with train/test split        |
 | 6. PACKAGE  | "package for distribution"                       | Validate + bundle into .skill file                              |
@@ -112,7 +87,7 @@ Choose degrees of freedom — this determines how much control vs. flexibility t
 | Medium (pseudocode) | preferred pattern exists, some variation ok | data processing         |
 | High (text)         | multiple valid approaches, judgment needed  | design decisions        |
 
-**Если скил процедурный** (бизнес-процесс с цепочкой действий и решениями: обработка заявки, создание КП, обработка счёта, онбординг, эскалация инцидента) — прочитай `references/sop-practices.md`. Там 8 принципов из 80-летней SOP-традиции (армия США → авиация → McDonald's): TWI-структура шагов, inline-чеклисты, 5 Why, выбор формата (simple/hierarchical/flowchart), запреты на модальные слова. Это сильно меняет как пишется SKILL.md для процедурных задач.
+**Golden rule: read `references/sop-practices.md` before authoring or reviewing ANY skill.** It holds the canonical **9 authoring principles** (universal): pre-flight, no-process-in-description, MOC (SKILL.md = map, not prose), fresh-practitioner author, TWI "why", blind-agent test, inline checklists, one-term-per-concept, cut-the-fat (env/keys OUT of SKILL.md). For **procedural** skills (business process with branching: request, quote, onboarding, escalation) the same file also has the deep SOP methodology — format selection, 7-step process, procedural checklist.
 
 ### Step 4: Scaffold
 
@@ -184,12 +159,14 @@ Error: [message] → Cause: [why] → Fix: [how]
 
 #### Writing rules
 
-- **One term per concept.** Pick "template" and stick with it — not template/boilerplate/scaffold
+- **One term per concept.** Pick "template" and stick with it — not template/boilerplate/scaffold (Principle 8)
+- **SKILL.md = map, not prose.** Body is a table-of-contents pointing to references; detail lives there (Principle 3)
+- **No secrets/env in SKILL.md.** No keys, passwords, tokens, env values, or user-absolute paths (`/home/<user>`, `/Users/<user>`) — reference them, never inline (Principle 9a)
 - **Progressive disclosure.** SKILL.md = brain (<500 lines). References = details. One level deep
 - **Token budget.** Frequently loaded: <200 words. Standard: <500 lines. Heavy: move to references/
 - **No junk files.** No README, CHANGELOG inside the skill
 - **Scripts:** bundle when same code rewritten repeatedly, or operation is fragile. Must return descriptive stdout/stderr on failure
-- **Imperative voice.** Use "Extract the data", not "you should extract" or capitalized "MUST/NEVER" — explanation > rule (see `references/sop-practices.md` Principle 2)
+- **Imperative voice.** Use "Extract the data", not "you should extract" or capitalized "MUST/NEVER" — explanation > rule (see `references/sop-practices.md` Principle 5, TWI)
 
 ### Step 6: Test Cases & Eval Loop
 
@@ -258,7 +235,7 @@ Read the existing SKILL.md completely. Identify the problem class:
 2. **Keep the prompt lean.** Read transcripts, not just outputs. If the skill makes the model waste time on unproductive steps, remove those instructions and see what happens
 3. **Explain the why.** LLMs have good theory of mind. Instead of ALWAYS/NEVER in caps, explain the reasoning — it's more powerful and robust. If you're writing rigid rules, reframe as explanations
 4. **Look for repeated work.** If all test runs independently write the same helper script, bundle it in `scripts/`. Saves every future invocation from reinventing the wheel
-5. **For procedural skills - apply SOP practices.** If improving a process skill (handling a ticket, generating a quote, escalating an incident), read `references/sop-practices.md`. The 8 principles from SOP tradition (TWI step structure, inline checklists, 5 Why, removing modal weasel words like "regularly/typically/как правило") map directly to skill failure modes — silent improvisation, missed edge cases, agents skipping checklists at end of doc
+5. **Apply the authoring canon.** Read `references/sop-practices.md` — the 9 canonical principles (universal) map directly to skill failure modes: process leaking into description, SKILL.md bloated instead of a map, env/keys inlined, silent improvisation from missing "why", missed edge cases, agents skipping end-of-doc checklists. For process skills (ticket, quote, escalation) also apply the deep SOP methodology in the same file
 
 ### Step 2: Eval Iteration Loop
 
@@ -271,13 +248,23 @@ The improvement cycle mirrors CREATE Step 6, but focused on the broken behavior:
    - **Headless/Cowork:** use `--static <output.html>` instead of live server
 5. Review, provide feedback, iterate
 
-### Step 3: Blind Comparison (optional, for major changes)
+### Step 3: Self-Update Loop
+
+Drive iteration off failing BinEval questions, not taste. Run the loop:
+
+1. Generate questions and evaluate the skill (see Mode 3 Stage 3 + `references/bineval-method.md`) → collect `failing[]`
+2. Spawn `agents/analyzer.md` as note-taker: turn the failing questions + their explanations into generalized, deduped lessons (not one-off patches for a single test case)
+3. Apply targeted edits addressing those lessons
+4. Re-evaluate. **Revert any edit that introduces a NEW failing question.**
+5. Terminate when `failing[]` (or its critical subset) is empty, or after 3 iterations. Keep the best result by `gate_passed` first, then overall S.
+
+### Step 3b: Blind Comparison (optional, for major changes)
 
 When you have two meaningfully different versions:
 
 1. Run both versions on the same evals
-2. Spawn `agents/comparator.md` — receives outputs A and B without knowing which skill produced which
-3. Comparator scores on rubric (content + structure, 1–5 each) and picks a winner
+2. Spawn `agents/comparator.md` — answers the SAME binary questions for outputs A and B without knowing which skill produced which
+3. Comparator reports per-dimension yes-rate for each version; winner = higher overall yes-rate, tiebreak = critical-dimension yes-rate
 4. Spawn `agents/analyzer.md` — unblinds results, analyzes WHY the winner won
 5. Apply insights to improve the losing version
 
@@ -312,19 +299,22 @@ For automated trigger testing at scale, use:
 uv run scripts/run_eval.py --eval-set <path> --skill-path <path> --runs-per-query 3
 ```
 
-### Stage 3: 5-Axis Scoring
+### Stage 3: BinEval Scoring
 
-Rate on 5 axes (1–10 each):
+Evaluate with atomic binary yes/no questions across 5 dimensions — each answered 1/0 with evidence. See `references/bineval-method.md` for the method, `references/quality-questions.md` for the question bank, and `agents/bineval.md` for the evaluator that emits `bineval.json`.
 
-| Axis         | What it measures                                    |
-| ------------ | --------------------------------------------------- |
-| Discovery    | triggers correctly, doesn't false-trigger           |
-| Clarity      | instructions unambiguous, no guessing needed        |
-| Efficiency   | token budget respected, progressive disclosure used |
-| Robustness   | handles edge cases, scripts have error handling     |
-| Completeness | covers the stated use cases fully                   |
+The 5 dimensions: **Discovery, Clarity, Structure, Robustness, Completeness**.
 
-**Interpretation:** 45–50 production ready · 35–44 solid · 25–34 needs work · <25 rewrite
+Questions come from two sources:
+
+- **Deterministic** — emitted by `scripts/eval_skill.py --json` (the sole emitter), e.g. `DET-STRUCT-SKILLMD-EXISTS`, `DET-DISCOVERY-DESC-PRESENT`. Some are flagged critical.
+- **Generated** — per-skill binary questions via the two-step meta-prompt (summarize the skill into requirements → decompose each into ≥1 yes/no question with a violation example).
+
+Aggregate: per-dimension `dimension_scores` S_d = mean of that dimension's answers; overall S = mean of all answers.
+
+**Display bands:** S≥0.90 production-ready · 0.70–0.89 solid · 0.50–0.69 needs-work · <0.50 rewrite.
+
+**GATE** = every critical question (deterministic + critical bank questions) answered 1. The GATE is the pass criterion — not the scalar S.
 
 ---
 
@@ -349,6 +339,8 @@ Quick quality gate for third-party skills.
 ```
 
 Then run VALIDATE Stage 2 (discovery) on the description. Report score + checklist.
+
+The deterministic subset of this checklist is emitted as binary BinEval question records by `scripts/eval_skill.py --json` (e.g. `DET-STRUCT-SKILLMD-EXISTS`, `DET-DISCOVERY-DESC-PRESENT`, `DET-ROBUST-NO-SECRETS`) — the sole emitter of those records.
 
 The checklist exists because these are the failure modes that actually happen in practice — especially process-in-description, which causes the agent to skip the body entirely.
 
@@ -462,9 +454,13 @@ Creates `skill-name.skill` (zip with .skill extension). Verify: unzip in temp di
 | `agents/grader.md`               | Evidence-based assertion grading           |
 | `agents/comparator.md`           | Blind A/B output comparison                |
 | `agents/analyzer.md`             | Post-hoc analysis + benchmark notes        |
+| `agents/bineval.md`              | BinEval evaluator — emits `bineval.json`   |
 | `references/patterns.md`         | 5 architectural patterns + anti-patterns   |
 | `references/schemas.md`          | JSON schemas for evals, grading, benchmark |
-| `references/sop-practices.md`    | 8 SOP principles for procedural skills (TWI, 5 Why, format selection, modal weasel words) |
+| `references/bineval-method.md`   | BinEval method: dimensions, scoring, GATE  |
+| `references/quality-questions.md`| BinEval question bank (deterministic + bank)|
+| `references/sop-practices.md`    | **Canon: 9 authoring principles (universal)** + deep SOP methodology for procedural skills |
+| `references/runtime-setup.md`    | Pre-flight: uv/env/path checks, LLM-access options |
 | `eval-viewer/`                   | Interactive HTML viewer for eval results   |
 | `assets/eval_review.html`        | Trigger eval set editor                    |
 | `scripts/eval_skill.py`          | Structural validation (10-point scoring)   |
@@ -475,6 +471,6 @@ Creates `skill-name.skill` (zip with .skill extension). Verify: unzip in temp di
 | `scripts/aggregate_benchmark.py` | Benchmark statistics aggregator            |
 | `scripts/generate_report.py`     | HTML report generator                      |
 | `scripts/quick_validate.py`      | Quick validation for packager              |
-| `scripts/test_smoke.py`          | Smoke tests for all scripts (9 tests)      |
+| `scripts/test_smoke.py`          | Smoke tests for all scripts (12 tests)     |
 | `scripts/package_skill.py`       | Skill → .skill packager                    |
 | `scripts/utils.py`               | Shared utilities (parse_skill_md)          |

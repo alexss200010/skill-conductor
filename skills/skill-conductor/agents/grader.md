@@ -30,7 +30,14 @@ You receive these parameters in your prompt:
 2. Read/examine each file relevant to the expectations. If outputs aren't plain text, use the inspection tools provided in your prompt — don't rely solely on what the transcript says the executor produced.
 3. Note contents, structure, and quality
 
-### Step 3: Evaluate Each Assertion
+### Step 3: Frame Expectations as Binary Questions (BinEval)
+
+Each expectation is a GENERATED binary yes/no question: "yes" (passed=true) means the criterion is satisfied, "no" (passed=false) means it is violated. Derive them with the two-step meta-prompt:
+
+1. **Summarize** — turn the eval target (the prompt + the outputs it should produce) into explicit requirements R = {r1..rK}, each a distinct, checkable criterion. The supplied expectations are your starting requirements; tighten any that are vague.
+2. **Decompose** — for each requirement, emit at least one binary question whose "yes" = satisfied and "no" = violated, paired with a concise violation example.
+
+Assign every expectation a **dimension** — one of `Discovery`, `Clarity`, `Structure`, `Robustness`, `Completeness` — based on what the criterion tests. This dimension drives the aggregate `dimension_scores`.
 
 For each expectation:
 
@@ -116,16 +123,19 @@ Write a JSON file with this structure:
   "expectations": [
     {
       "text": "The output includes the name 'John Smith'",
+      "dimension": "Completeness",
       "passed": true,
       "evidence": "Found in transcript Step 3: 'Extracted names: John Smith, Sarah Johnson'"
     },
     {
       "text": "The spreadsheet has a SUM formula in cell B10",
+      "dimension": "Completeness",
       "passed": false,
       "evidence": "No spreadsheet was created. The output was a text file."
     },
     {
       "text": "The assistant used the skill's OCR script",
+      "dimension": "Robustness",
       "passed": true,
       "evidence": "Transcript Step 2 shows: 'Tool: Bash - python ocr_script.py image.png'"
     }
@@ -136,6 +146,18 @@ Write a JSON file with this structure:
     "total": 3,
     "pass_rate": 0.67
   },
+  "dimension_scores": {
+    "Completeness": { "score": 0.5, "passed": 1, "total": 2 },
+    "Robustness": { "score": 1.0, "passed": 1, "total": 1 }
+  },
+  "failing": [
+    {
+      "text": "The spreadsheet has a SUM formula in cell B10",
+      "dimension": "Completeness",
+      "passed": false,
+      "evidence": "No spreadsheet was created. The output was a text file."
+    }
+  ],
   "execution_metrics": {
     "tool_calls": {
       "Read": 5,
@@ -189,15 +211,18 @@ Write a JSON file with this structure:
 
 ## Field Descriptions
 
-- **expectations**: Array of graded expectations
-  - **text**: The original expectation text
-  - **passed**: Boolean - true if expectation passes
+- **expectations**: Array of graded expectations, each a GENERATED binary question
+  - **text**: The original expectation text (phrased as a yes/no criterion)
+  - **dimension**: One of `Discovery`, `Clarity`, `Structure`, `Robustness`, `Completeness`
+  - **passed**: Boolean - true ("yes") if the criterion is satisfied, false ("no") if violated
   - **evidence**: Specific quote or description supporting the verdict
 - **summary**: Aggregate statistics
   - **passed**: Count of passed expectations
   - **failed**: Count of failed expectations
   - **total**: Total expectations evaluated
   - **pass_rate**: Fraction passed (0.0 to 1.0)
+- **dimension_scores**: Per-dimension aggregate, keyed by dimension name. Each entry: `score` (mean of that dimension's answers, 0.0 to 1.0), `passed` (count answered yes), `total` (count in that dimension). Include only dimensions that have at least one expectation.
+- **failing**: Array of the expectations that did not pass (subset of `expectations`, same `{text, dimension, passed, evidence}` shape). Empty when all pass. Drives the self-update improve loop.
 - **execution_metrics**: Copied from executor's metrics.json (if available)
   - **output_chars**: Total character count of output files (proxy for tokens)
   - **transcript_chars**: Character count of transcript

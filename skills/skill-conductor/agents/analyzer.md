@@ -186,6 +186,129 @@ Use these categories to organize improvement suggestions:
 
 ---
 
+# Note-taker Mode (Self-update Loop)
+
+In the Mode 2 IMPROVE self-update loop, the analyzer runs as a **Note-taker**. It does not compare two skills. Instead it consumes the `failing[]` array from a single `bineval.json` evaluation and turns raw failing questions into a small set of **generalized, deduped lessons** that drive targeted skill edits.
+
+## Role
+
+The evaluator emits many granular failing questions, several of which describe the same underlying defect from different angles (e.g. "no WHY for step 3", "no WHY for the validation rule", "rationale missing for the fallback"). Feeding each one to the editor separately causes scattered, redundant edits. The Note-taker collapses semantically similar failures into one lesson per root cause, so each edit fixes a class of problems at once.
+
+## Inputs
+
+You receive these parameters in your prompt:
+
+- **bineval_path**: Path to the `bineval.json` produced by the evaluator (read its `failing[]` and `dimension_scores`)
+- **skill_path**: Path to the skill being improved
+- **iteration**: Current self-update iteration number (1, 2, or 3)
+- **prior_lessons_path** (optional): Path to lessons emitted in a previous iteration, to avoid re-proposing reverted or already-applied edits
+- **output_path**: Where to save the lessons JSON
+
+## Process
+
+### Step 1: Read Failing Questions
+
+1. Read `bineval.json` at bineval_path
+2. Collect every entry in `failing[]` — each has `id`, `dimension`, `text`, `explanation`, `critical`
+3. Note `dimension_scores` to see which dimensions are weakest overall
+
+### Step 2: Cluster by Root Cause
+
+Group failing questions that share a root cause, not just a dimension. Two questions belong to the same cluster when fixing one would plausibly fix the other.
+
+Signals that questions belong together:
+
+- Same SKILL.md region or reference file is implicated by their explanations
+- They describe the same missing element repeated in different places (missing WHY, missing trigger, missing edge-case handling)
+- They are different symptoms of one structural problem (e.g. SKILL.md is a prose dump → causes both "not a map" and "body too long")
+
+Keep deterministic `DET-*` failures as their own clusters when they have a single concrete fix (e.g. `DET-STRUCT-NO-README` → delete the README). Do not merge a critical failure into a non-critical cluster — critical fixes must stay visible.
+
+### Step 3: Generalize Each Cluster into a Lesson
+
+For each cluster, write ONE lesson that:
+
+- States the **generalized defect** (the pattern, not the single instance)
+- Names the **concrete fix** (what to change in which file/region)
+- Lists the **source question ids** it resolves (so re-evaluation can confirm)
+- Carries a **dimension** and a **critical** flag (critical if any clustered question is critical)
+- Carries a **priority**: `high` if it closes a critical question or the weakest dimension, else `medium`/`low`
+
+A good lesson is reusable: phrased so it would catch the same defect class on another skill, but paired with a fix specific enough to apply now.
+
+### Step 4: Dedupe Against Prior Lessons
+
+If prior_lessons_path is provided:
+
+- Drop any lesson whose fix was already applied and did NOT clear its source questions (it failed — flag it `recurring` instead of re-proposing the identical edit, and suggest a different approach)
+- Drop any lesson whose edit was reverted in a prior iteration because it introduced a NEW failing question (do not re-propose the reverted edit)
+
+### Step 5: Order for Targeted Editing
+
+Sort lessons so the editor applies them in impact order: critical first, then by priority, then by how many questions each closes. This keeps the loop converging on the GATE (all critical questions = 1) before chasing marginal score gains.
+
+### Step 6: Write Lessons
+
+Save lessons to `{output_path}`.
+
+## Output Format
+
+Write a JSON file with this structure:
+
+```json
+{
+  "iteration": 1,
+  "skill_path": "path/to/skill",
+  "weakest_dimensions": ["Clarity", "Structure"],
+  "lessons": [
+    {
+      "id": "L1",
+      "dimension": "Clarity",
+      "defect": "Instructions state WHAT to do but never WHY — agents can't adapt when the literal step doesn't fit",
+      "fix": "Add a one-line rationale (TWI) after each imperative step in SKILL.md sections 'Extract' and 'Validate'",
+      "resolves": ["Q-CLARITY-2", "Q-CLARITY-4", "Q-CLARITY-7"],
+      "critical": false,
+      "priority": "high",
+      "status": "new"
+    },
+    {
+      "id": "L2",
+      "dimension": "Structure",
+      "defect": "SKILL.md is a prose dump, not a map — long body with few anchors forces full-file reads",
+      "fix": "Split the 'Workflow' prose into a reference file and replace with a 4-bullet MOC linking to it",
+      "resolves": ["Q-STRUCT-1", "Q-STRUCT-3", "DET-STRUCT-MOC"],
+      "critical": false,
+      "priority": "high",
+      "status": "new"
+    },
+    {
+      "id": "L3",
+      "dimension": "Robustness",
+      "defect": "An exported env var sits in a SKILL.md code block",
+      "fix": "Remove the export line; reference the variable name only",
+      "resolves": ["DET-ROBUST-NO-SECRETS"],
+      "critical": true,
+      "priority": "high",
+      "status": "new"
+    }
+  ]
+}
+```
+
+`status` is one of: `new`, `recurring` (proposed before, prior fix did not clear it — try a different approach), `reverted` (prior edit was rolled back; do not repeat).
+
+## Guidelines
+
+- **One lesson per root cause**: merge semantically similar failures; never emit one lesson per failing question
+- **Generalize, then specialize**: the `defect` is the reusable pattern, the `fix` is the concrete edit for this skill
+- **Traceability**: every lesson lists the `resolves` ids so re-evaluation can verify the failures cleared
+- **Critical stays critical**: never bury a critical failure inside a non-critical cluster; gate-closing lessons rank first
+- **Surgical fixes**: each `fix` touches only what the defect requires — a lesson that triggers a broad rewrite is too coarse, split it
+- **Respect the loop's exit**: when `failing[]` is empty, emit zero lessons; the loop terminates
+- **No redundant edits**: honor prior_lessons_path — never re-propose a reverted edit or repeat a fix that already failed
+
+---
+
 # Analyzing Benchmark Results
 
 When analyzing benchmark results, the analyzer's purpose is to **surface patterns and anomalies** across multiple runs, not suggest skill improvements.

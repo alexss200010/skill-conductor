@@ -1,305 +1,288 @@
-# SOP Practices for Skill Authoring
+# Authoring Principles — the canon of 9 principles
 
-> Восемьдесят лет человечество училось эффективно "промптить" людей писать процедуры. SOP-традиция (армия США, авиация, энергетика, McDonald's operations manual на 600+ страниц) даёт готовый набор практик для **процедурных скилов** - тех что описывают цепочку действий с решениями и исключениями.
+> For eighty years humanity has been learning to effectively "prompt" people into following procedures. The SOP tradition (US military, aviation, energy, McDonald's 600+ page operations manual) gives us a ready-made set of practices. Here they are distilled into **9 canonical principles for authoring skills**.
 
-## Когда использовать этот reference
+## When to use this reference
 
-**Используй для процедурных (process) скилов:**
-- обработка входящей заявки клиента
-- создание коммерческого предложения
-- обработка счёта от поставщика
-- онбординг нового пользователя
-- подготовка еженедельного отчёта
-- эскалация инцидента
+**Golden rule: open this SOP before writing or reviewing ANY skill.** The canon below is universal — it applies to every class of skill (tool, capability, procedure).
 
-**НЕ используй для:** скилов вокруг конкретного инструмента (PDF utilities, Google Ads API, Figma export). Там работают паттерны из `patterns.md`. SOP-практики бьют в процедурный класс задач.
+Apply principles 1-9 always. The sections at the end (**Deep procedural methodology**: SOP Format Selection, the 7-step process, the procedural-skill checklist) are for **procedural** skills: processing a support ticket, producing a price quote, onboarding, incident escalation, a weekly report. For skills built around a tool (PDF, Google Ads API, Figma export) also see `patterns.md`.
 
 ---
 
-## Принцип №1: Чек-листы по месту применения
+## Principle #1: Pre-flight check
 
-**SOP-аксиома:** в сложных процессах ошибки происходят не от незнания, а от **пропуска известных критических шагов**. Лечится коротким, точным чек-листом **в момент риска** - а не в общем разделе документа.
+**SOP:** steps that can't be performed with the available equipment will be worked around. "Do X with tool Y" — if Y is broken, the operator invents a substitute themselves. Hopefully the right one.
 
-### Применение к скилам
-
-Прогрессивное раскрытие в скилах усугубляет проблему: модель может вообще не дочитать до раздела "Чеклисты" в конце SKILL.md. Решения:
-
-1. **Inline-чеклисты прямо в шаге.** Не "см. раздел Quality" - а маркированный список из 3-5 пунктов рядом с риск-шагом.
-2. **Программная валидация = инструментальная проверка SOP.** Если шаг можно проверить детерминированно (regex, JSON schema, exit code) - выноси в `scripts/`. Аналог "проверка манометром" в SOP - не оставляй на глаз.
-3. **Pre-flight check в начале процедуры.** Список "что должно быть готово ДО старта" - аналог mise en place в кулинарии.
-
-### Антипаттерн
-
-```markdown
-## Алгоритм
-1. Получить данные клиента
-2. Сверить с CRM
-3. Сформировать КП
-...
-## Контроль качества (в конце документа)
-- Проверить контакты
-- Проверить НДС
-- Проверить дату
-```
-
-Модель прочитает шаги, выполнит, **до раздела QA не дойдёт** или не свяжет одно с другим.
-
-### Правильно
-
-```markdown
-## Шаг 3: Сформировать КП
-
-**Перед составлением проверить (inline checklist):**
-- [ ] контакты клиента из about.md, не выдуманы
-- [ ] цены из prices-{region}.md, ни одна не округлена
-- [ ] НДС учтён по региону
-
-[дальше шаги]
-```
-
----
-
-## Принцип №2: TWI - "шаг → ключевой момент → почему"
-
-**Toyota Industries Training Within Industry** учит: без объяснения "почему" шаг обходят при первом неудобстве.
-
-- У человека: сопротивление инструкции, "это бюрократия, мне виднее".
-- У модели: тихая импровизация. Инструкция выполнена формально, edge-case отработан "по-своему".
-
-### Структура шага
-
-| Слой | Что | Пример |
-|---|---|---|
-| **Шаг** | Что сделать | "Скопируй прайс из prices-by.md, не округляй цены" |
-| **Ключевой момент** | На что обратить внимание | "Каждая цена должна остаться с копейками. $1,234.56 ≠ $1,235." |
-| **Почему** | Зачем это важно | "Округление ломает доверие клиента: он сверит итог в Excel и увидит расхождение. Один такой случай в 2025 стоил TDI $12K сделки." |
-
-### Применение к SKILL.md
-
-```markdown
-## Шаг 2: Расчёт сметы
-
-**Шаг:** для каждой позиции взять цену из prices-{region}.md и умножить на количество.
-
-**Ключевой момент:** не складывай позиции из разных прайсов в одну строку. Каждая строка сметы = одна позиция одного прайса.
-
-**Почему:** клиент копирует строки в свой Excel. Микс прайсов в одной строке делает невозможной обратную сверку, и клиент перестаёт доверять смете.
-```
-
-Длинно? Да. Но именно "почему" блокирует тихую импровизацию модели на edge-cases.
-
----
-
-## Принцип №3: Автор = свежий практик
-
-**Toyota:** инструкцию пишет тот, кто **только что делал работу** - у него жива память о тупиках, путанице, неочевидных аргументах. Менеджер из кабинета пропустит ключевые моменты.
-
-### Применение к скилам
-
-Скил, написанный "из головы" или "по памяти" о том как делалось полгода назад - **систематически пропускает 30-40% реальных edge-cases**. Признаки:
-
-- автор не может назвать конкретный last-week кейс где скил бы помог
-- в скиле нет ни одного реального примера из жизни (только синтетические "Acme Corp")
-- разделы "Common mistakes" пустые или абстрактные
-
-### Workflow
-
-1. **Перед написанием** - сделай задачу руками от начала до конца. Один раз. Свежим заходом.
-2. **Веди заметки на ходу** - где задумался, где сомневался, где пошёл в Google, где сделал ошибку и откатил.
-3. **Через 24 часа** - перечитай заметки. То что казалось "очевидным" в момент работы - чаще всего и есть скрытое знание которое надо вытащить в скил.
-4. **Только потом пиши SKILL.md.** Превращай заметки в шаги + ключевые моменты + почему.
-
----
-
-## Принцип №4: Dry-run на неосведомлённом исполнителе
-
-**SOP:** эксперт автоматически достраивает пропуски из опыта **и не замечает этого**. Поэтому SOP тестируют на новичке - человеке, не знакомом с процессом.
-
-### Pattern Agent A / Agent B
-
-Перенос на скилы - **разделить написание и исполнение в две сессии**:
-
-| Сессия | Контекст | Задача |
-|---|---|---|
-| **Agent A (writer)** | знает домен, пишет скил | создать SKILL.md + references |
-| **Agent B (executor)** | свежая сессия, нет домена, скил активен | выполнить тестовый кейс |
-
-**Ты наблюдаешь разрыв** между "что Agent A имел в виду" и "что Agent B реально сделал". Каждый разрыв - найденный пропуск в инструкции.
-
-### Где разрыв чаще всего возникает
-
-1. **Имплицитные знания.** "Возьми последний прайс" - какой "последний"? По дате файла? По названию? По git history? Agent A знает, Agent B - нет.
-2. **Неназванные источники.** "Контакты из about.md" - а если about.md нет? Где брать тогда? Agent A полез бы в memory, Agent B ничего не сделает или выдумает.
-3. **Нечёткие условия выхода.** "Когда смета готова - отправь" - что значит "готова"? Все строки заполнены? Кто-то проверил? Цифры сходятся?
-
-### Практически
-
-В `skill-conductor` это уже встроено: Mode 1 Step 6 (Eval Loop) спавнит executor subagent **в чистой сессии**, baseline run - тоже в чистой. Сравниваешь with-skill vs without-skill - и смотришь на разрыв "что хотел" vs "что получилось".
-
-Усиление: периодически прогоняй скил **сам, в чистой сессии без своего vault'а**. Если без своего контекста скил ломается - значит ты вшил в него assumptions которые не вытащил в текст.
-
----
-
-## Принцип №5: Физическая выполнимость → совместимость с рантаймом
-
-**SOP:** шаги, невыполнимые имеющимся оборудованием, будут обходиться. "Доить с помощью X" - если X сломан, доярка изобретёт замену сама. Хорошо если правильную.
-
-### Применение к скилам
+The skill's first command is a runtime check: required tools are installed, env variables are present, required files exist. **If something is missing → do NOT continue; tell the user immediately** what's missing and where to get it.
 
 | SOP | Skill |
 |---|---|
-| "проверить давление манометром" | "проверить статус через `gh pr status`" - а если `gh` не установлен? |
-| "записать в журнал в комнате 3" | "сохранить в vault" - а если vault не доступен в этой сессии? |
-| "залить через насос Y" | "поставить пакет через `npm install`" - а если облачный агент без интернета? |
+| "check pressure with the gauge" | "check status via `gh pr status`" — but what if `gh` isn't installed? |
+| "log it in the register in room 3" | "save to the vault" — but what if the vault isn't available in this session? |
+| "pump it through line Y" | "install the package via `npm install`" — but what if it's a cloud agent with no internet? |
 
-### Структура SKILL.md
+The pre-flight block itself (tools/env/files checks) **goes into `references/`, not inline in SKILL.md** — see principle #9. SKILL.md keeps only a pointer line: "before working, run pre-flight → references/runtime-setup.md".
 
 ```markdown
-## Требования к рантайму (pre-flight)
+## Runtime requirements (pre-flight)
 
-**Обязательно:**
-- `uv` установлен и доступен (полный путь `/home/shima/.local/bin/uv`)
-- `FAL_KEY` в env (проверка: `echo "${FAL_KEY:-MISSING}" | head -c 5`)
-- workspace path `~/.zeroclaw/workspace/skills/nb/scripts/generate_image.py` существует
+**Required:**
+- `uv` is installed and available
+- the required key is present in env (check: `echo "${SOME_KEY:-MISSING}" | head -c 5`)
+- the required workspace file exists
 
-**Если что-то отсутствует - НЕ продолжать.** Сообщить пользователю что не хватает и где это взять.
+**If anything is missing — do NOT continue.** Tell the user what's missing and where to get it.
 ```
 
-Это первая команда в скиле. Без неё всё что ниже - "обходится по-своему".
+Without pre-flight, everything below "gets worked around in its own way".
 
 ---
 
-## Принцип №6: Один шаг - одно действие, без отрицаний
+## Principle #2: Don't describe the top-level process in the description
 
-Из guide: пишите шаги как **императивные предложения с одним глаголом действия**. Длинные предложения с условиями ("сделай Х, если только не Y, разве что Z") модель интерпретирует на свой вкус.
+A skill is a **lens/capability**, not a multi-step workflow. The description states WHAT it is and WHEN to trigger it, but not HOW (the steps live in the body). If the process is baked into the description, the model will "execute the description" and never read the body.
 
-### Антипаттерн
+```markdown
+# GOOD: purpose + triggers, no process
+description: Analyze Figma design files for developer handoff. Use when...
 
-Использование длинного предложения которое слиено два разных действия в одно. Модель/работник может выбрать одно или другое наугад.
+# BAD: process in the description (the agent skips the body)
+description: Exports Figma assets, then generates specs, then creates Linear
+tasks, then posts to Slack...
+```
 
-### Правильно
+Process markers in the description (auto-flagged in `eval_skill.py`): `then`, `first…then`, `step N`, `phase N`, `followed by`, `after …ing`.
 
-Один глагол на верхнем уровне. Условие - в подшаге.
+---
 
-### Запрещённые конструкции в SKILL.md
+## Principle #3: MOC it! — SKILL.md = a map, not a process
 
-| Плохо | Хорошо |
+**SKILL.md is a table of contents (Map-of-Content), not the place for all the text.** The body shows *where to look* — short anchor sections with links to the SOP/references where the detailed procedure lives. The golden rule: "open the SOP first".
+
+| Bad | Good |
 |---|---|
-| "избегай длинных промптов" | "длина промпта не более 200 слов" |
-| "не забудь проверить контакты" | "Проверь: контакты совпадают с about.md" |
-| "не используй устаревшие данные" | "Используй данные не старше 7 дней" |
-| "по возможности сократи" | "сократи до 3 буллетов" |
+| 400 lines of prose, the whole process inline | Overview + a map of sections + links to `references/*.md` |
+| every step's detail right in SKILL.md | one anchor paragraph + `→ references/step-details.md` |
+| pre-flight bash block inline | pointer line `→ references/runtime-setup.md` |
 
-**Правило:** императив + измеримый критерий. Никаких "не" если можно сформулировать через "что делать".
+Sign of a violation: the SKILL.md body swells toward the limit (500 lines), few headers relative to the volume of text. The fix is to move detail into `references/` and replace it with a link. Progressive disclosure only works if SKILL.md is a navigator, not a dumping ground.
 
 ---
 
-## Принцип №7: Убрать модальные слова-резинки
+## Principle #4: The author = a fresh practitioner
 
-Из SOP-традиции (Wieringa "Procedure Writing"): слова **"periodically", "regularly", "typically", "usually", "as needed"** делают инструкцию неизмеримой.
+**Toyota:** the instruction is written by whoever **just did the work** — their memory of the dead ends, the confusion, the non-obvious arguments is still fresh. A manager from the office will miss the key points.
 
-### Маппинг в скилы
+A skill written "from memory" or "from the head" about how it was done six months ago **systematically misses 30-40% of the real edge cases**. Symptoms:
 
-| Резиновое | Конкретное |
+- the author can't name a concrete last-week case where the skill would have helped
+- the skill has no real-life example at all (only synthetic "Acme Corp" ones)
+- the "Common mistakes" sections are empty or abstract
+
+### Workflow
+
+1. **Before writing** — do the task by hand from start to finish. Once. With a fresh run.
+2. **Take notes as you go** — where you paused, where you doubted, where you went to Google, where you made a mistake and rolled it back.
+3. **After 24 hours** — reread the notes. What seemed "obvious" in the moment of doing the work is most often the hidden knowledge that needs to be surfaced into the skill.
+4. **Only then write SKILL.md.** Turn the notes into steps + key points + why.
+
+---
+
+## Principle #5: TWI — "step → key point → why"
+
+**Toyota Industries Training Within Industry** teaches: without an explanation of "why", a step gets skipped at the first inconvenience.
+
+- With a person: resistance to the instruction, "this is bureaucracy, I know better".
+- With a model: quiet improvisation. The instruction is followed nominally, the edge case is handled "in its own way".
+
+### Structure of a step
+
+| Layer | What | Example |
+|---|---|---|
+| **Step** | What to do | "Copy the prices from prices-list.md, don't round them" |
+| **Key point** | What to watch for | "Every price must keep its cents. $1,234.56 ≠ $1,235." |
+| **Why** | Why it matters | "Rounding breaks customer trust: they'll reconcile the total in Excel and see a discrepancy. One such case once cost a $12K deal lost to a rounding error." |
+
+Long? Yes. But it's exactly the "why" that blocks the model's quiet improvisation on edge cases.
+
+### Sub-practice: 5 Whys — down to the root
+
+**Toyota Five Whys:** when formulating the "why", **ask "why" 5 times** — you'll reach the root.
+
+"Why must the quote keep its cents without rounding?"
+1. So the customer can reconcile the total
+2. Why reconcile? They copy it into their own Excel
+3. Why into Excel? To sign off with their CFO
+4. Why doesn't the CFO trust it? They once found a discrepancy
+5. Why was there a discrepancy? Someone rounded it "to look nice"
+
+**Conclusion:** the "don't round" rule protects not "table aesthetics" but **trust in the vendor across the next 10 projects**. Don't stop at the first answer — dig down to the business effect, then the model understands the **class of situations** where the rule is critical.
+
+---
+
+## Principle #6: The blind-agent test (optional, for major changes)
+
+**SOP:** an expert automatically fills in the gaps from experience **and doesn't notice it**. That's why SOPs are tested on a novice — someone unfamiliar with the process.
+
+### Pattern Agent A / Agent B
+
+Split writing and execution into two sessions:
+
+| Session | Context | Task |
+|---|---|---|
+| **Agent A (writer)** | knows the domain, writes the skill | create SKILL.md + references |
+| **Agent B (executor)** | fresh session, no domain, skill is active | execute a test case |
+
+**You observe the gap** between "what Agent A meant" and "what Agent B actually did". Each gap is a found omission in the instruction.
+
+### Where the gap most often appears
+
+1. **Implicit knowledge.** "Take the latest price list" — which "latest"? By date? By name? By git history?
+2. **Unnamed sources.** "Contacts from about.md" — but what if about.md doesn't exist? Agent A would reach into memory, Agent B will make it up.
+3. **Fuzzy exit conditions.** "When the quote is ready — send it" — what does "ready" mean?
+
+In `skill-conductor` this is built in: Mode 1 Step 6 (Eval Loop) spawns an executor subagent **in a clean session**. Reinforcement: periodically run the skill yourself, in a clean session without your own vault — if it breaks, you baked in assumptions you didn't surface into the text.
+
+---
+
+## Principle #7: Checklists at the point of use
+
+**SOP axiom:** in complex processes, errors come not from ignorance but from **skipping known critical steps**. The fix is a short checklist **at the moment of risk** — not in a general section at the end of the document.
+
+Progressive disclosure makes it worse: the model may not read down to the "Checklists" section at the end of SKILL.md. Solutions:
+
+1. **Inline checklists right inside the step.** Not "see the Quality section" — a list of 3-5 items next to the risk step.
+2. **Programmatic validation = tool-based check.** If a step can be checked deterministically (regex, JSON schema, exit code) — move it into `scripts/`. The analog of "checking with the gauge" — don't leave it to the eye.
+3. **Pre-flight check at the start** (see principle #1) — the analog of mise en place.
+
+```markdown
+## Step 3: Build the quote
+
+**Before drafting, verify (inline checklist):**
+- [ ] customer contacts come from about.md, not invented
+- [ ] prices come from prices-{region}.md, none rounded
+- [ ] tax applied per region
+
+[steps follow]
+```
+
+Anti-pattern: steps at the top, "Quality control" as a separate section at the end. The model will run the steps and **never reach QA**.
+
+---
+
+## Principle #8: One term = one word
+
+You picked "template" — then it's "template" everywhere, not a mix of "template / boilerplate / scaffold / shell". Synonyms for one concept force the model to guess whether it's the same object or a different one.
+
+| Bad | Good |
 |---|---|
-| "регулярно проверяй" | "проверяй раз в час / при каждом новом тикете" |
-| "обычно достаточно 3 итераций" | "максимум 3 итерации, после третьей escalate" |
-| "по необходимости загрузи" | "если файл prices.md не загружен - загрузи" |
-| "при возможности" | "если параметр X есть в input - используй; иначе skip" |
+| template / boilerplate / scaffold mixed together | picked `template` — use it everywhere |
+| "price / price list / price sheet / rate card" | one term across the whole skill |
 
-### Тест
-
-Перечитай SKILL.md и подсветь слова: typically, usually, generally, periodically, often, обычно, регулярно, периодически, при необходимости, по возможности. Каждое - кандидат на замену конкретным условием.
+Introduce a 1-line-per-term glossary if there are many. Don't breed extra synonyms.
 
 ---
 
-## Принцип №8: 5 Why - до корня
+## Principle #9: Get rid of the excess
 
-**Toyota Five Whys:** когда формулируешь причину почему шаг важен, **5 раз спроси "почему"**. Дойдёшь до корня.
+Two parts: remove useless text and move out secrets.
 
-### Пример
+### 9a. All env / keys / passwords — out of SKILL.md
 
-"Почему смета должна быть с копейками без округления?"
+SKILL.md **must not contain** keys, passwords, tokens, env values, or hardcoded user paths (`/home/<user>`, `/Users/<user>`). It's both a leak risk (the skill is public) and a violation of the map (principle #3).
 
-1. Чтобы клиент мог сверить итог
-2. Почему сверяет? Копирует в свой Excel
-3. Почему в Excel? Согласует с финдиректором
-4. Почему финдиректор не доверяет нашей смете? Один раз нашёл расхождение
-5. Почему было расхождение? Менеджер округлил для "красоты"
+| Bad (in SKILL.md) | Good |
+|---|---|
+| `export API_KEY=sk-abc123` | a reference to env: "needs `API_KEY` in the environment, see references/runtime-setup.md" |
+| `UV_BIN=/home/alice/.local/bin/uv` | `command -v uv` or `~/.local/bin/uv` in a reference |
+| inline pre-flight bash block | `→ references/runtime-setup.md` |
 
-**Вывод:** правило "не округляй" защищает не "красоту таблицы", а **доверие к агентству на следующих 10 проектах**.
+`eval_skill.py` scans SKILL.md for these patterns and flags them.
 
-### Применение
+### 9b. Useless text and weasel words
 
-Когда формулируешь "почему" в TWI-структуре - не останавливайся на первом ответе. Копни до бизнес-эффекта. Тогда модель поймёт **класс ситуаций** где это правило критично.
+"Write clearly and understandably" is a useless instruction — it changes nothing in the model's behavior. Remove it. The words **"periodically", "regularly", "typically", "usually", "as needed", "when possible"** make an instruction unmeasurable — replace them with a concrete condition.
+
+| Rubbery | Concrete |
+|---|---|
+| "check regularly" | "check once an hour / on every new ticket" |
+| "usually 3 iterations are enough" | "at most 3 iterations, escalate after the third" |
+| "load as needed" | "if prices.md isn't loaded — load it" |
+
+Token budget: often <200 words, the standard is <500 lines of body, heavy material goes into `references/`. No README/CHANGELOG inside the skill.
+
+### Sub-practice: one step — one action, no negations
+
+Write steps as an **imperative with a single verb**. Long sentences with conditions ("do X, unless Y, except when Z") get interpreted by the model however it likes.
+
+| Bad | Good |
+|---|---|
+| "avoid long prompts" | "prompt length no more than 200 words" |
+| "don't forget to check the contacts" | "Check: contacts match about.md" |
+| "don't use stale data" | "Use data no older than 7 days" |
+
+**Rule:** imperative + measurable criterion. No "don't" if it can be phrased as "what to do".
 
 ---
 
-## SOP Format Selection (из Penn State guide)
+## Deep procedural methodology (for procedural skills)
 
-Выбор формата по двум осям: число решений и число шагов.
+### SOP Format Selection (from the Penn State guide)
 
-| Решений | Шагов | Формат | Аналог в скилах |
+Choose the format along two axes: number of decisions and number of steps.
+
+| Decisions | Steps | Format | Analog in skills |
 |---|---|---|---|
-| мало | менее 10 | Simple Steps | Линейный numbered list в SKILL.md |
-| мало | более 10 | Hierarchical Steps | Шаги верхнего уровня + подшаги |
-| много | менее 10 | Flowchart | Decision tree (mermaid или таблица) |
-| много | более 10 | Flowchart + под-SOP | SKILL.md с decision tree + references/*.md |
+| few | fewer than 10 | Simple Steps | Linear numbered list in SKILL.md |
+| few | more than 10 | Hierarchical Steps | Top-level steps + sub-steps |
+| many | fewer than 10 | Flowchart | Decision tree (mermaid or a table) |
+| many | more than 10 | Flowchart + sub-SOP | SKILL.md with a decision tree + references/*.md |
 
-**Hierarchical** - дефолт для бизнес-процедур. Эксперт пробегает верхний уровень, новичок читает подшаги.
+**Hierarchical** is the default for business procedures. **Flowchart** — when there's branching; in skills it's a "situation → action" table:
 
-**Flowchart** - когда есть ветвление. В скилах это таблица "ситуация - действие".
-
-Пример Decision tree для обработки заявки:
-
-| Ситуация | Действие |
+| Situation | Action |
 |---|---|
-| бюджет менее 5K, BY | стандартное КП по prices-by.md |
-| бюджет 5K+, BY | КП + согласование с Марией Волчек |
-| регион не из 4 базовых | эскалация на директора |
-| тендер | analyst research ДО КП |
+| budget under 5K, region A | standard quote per prices-region-a.md |
+| budget 5K+, region A | quote + sign-off with the account lead |
+| region not among the 4 base ones | escalate to the director |
+| tender | analyst research BEFORE the quote |
 
----
-
-## SOP Development Process - 7 шагов (адаптация)
+### SOP Development Process — 7 steps (adaptation)
 
 | Penn State step | Skill-conductor mapping |
 |---|---|
 | 1. Plan for Results | Mode 1 Step 1: Capture Intent |
 | 2. First Draft | Mode 1 Step 4-5: Scaffold + Write |
-| 3. Internal Review | Mode 1 Step 7: правки от пользователя |
-| 4. External Review | Mode 4 REVIEW - чеклист стороннего рецензента |
-| 5. Testing | Mode 1 Step 6: Eval Loop с executor (новичок) |
-| 6. Post | Mode 6 PACKAGE - .skill бандл |
-| 7. Train | в самом SKILL.md - "почему" в каждом шаге |
+| 3. Internal Review | Mode 1 Step 7: edits from the user |
+| 4. External Review | Mode 4 REVIEW — third-party reviewer checklist |
+| 5. Testing | Mode 1 Step 6: Eval Loop with an executor (a novice) |
+| 6. Post | Mode 6 PACKAGE — .skill bundle |
+| 7. Train | inside SKILL.md itself — the "why" in every step |
 
-### Самое часто пропускаемое - Step 7 (Train)
+The most often skipped is **Step 7 (Train)**: Penn State explicitly says *share why, not just what*. Training isn't a separate stage after writing — it's part of the document; every step carries a mini-explanation of "why exactly this way".
 
-Penn State явно говорит: **share why, not just what**. Без "почему" люди и модели интерпретируют шаги по-своему.
+### Procedural-skill checklist before packaging
 
-В skill-conductor это уже отражено в "Explain the why". Но из SOP-традиции жёстче: обучение не отдельный этап после написания, а часть самого документа. Каждый шаг содержит мини-объяснение "зачем именно так".
+In addition to the standard REVIEW checklist (Mode 4):
 
----
-
-## Чеклист процедурного скила перед packaging
-
-Дополнительно к стандартному REVIEW-чеклисту (Mode 4):
-
-- [ ] Pre-flight check в начале SKILL.md - какие env/files/tools должны быть готовы
-- [ ] Каждый критический шаг = TWI-структура (что / ключевой момент / почему)
-- [ ] Inline-чеклисты в риск-точках, не в общем разделе в конце
-- [ ] Программная валидация для всего что можно проверить детерминированно (в scripts/)
-- [ ] Императивы, без отрицаний
-- [ ] Без модальных слов-резинок
-- [ ] Decision tree для процессов с ветвлением (более 2 решений)
-- [ ] Тест на новичке - прогнал executor в чистой сессии без своего контекста, скил отработал
-- [ ] 5 Why пройдено для главных правил - объяснение доходит до бизнес-эффекта
+- [ ] Pre-flight check (#1) — which env/files/tools must be ready
+- [ ] SKILL.md = a map (#3) — detail in references, not inline
+- [ ] Every critical step = TWI structure (#5: what / key point / why)
+- [ ] Inline checklists at the risk points (#7), not in a general section at the end
+- [ ] Programmatic validation for everything that can be checked deterministically (in scripts/)
+- [ ] One term per concept (#8)
+- [ ] No env/keys/paths in SKILL.md (#9a)
+- [ ] Imperatives without negations, no rubbery modal words (#9b)
+- [ ] Decision tree for processes with branching (more than 2 decisions)
+- [ ] Novice test (#6) — executor in a clean session without its own context, skill worked
+- [ ] 5 Whys done for the main rules — the explanation reaches the business effect
 
 ---
 
-## Источники
+## Sources
 
-- Penn State Extension - "Standard Operating Procedures: A Writing Guide" (Richard Stup) - https://extension.psu.edu/standard-operating-procedures-a-writing-guide
-- Wieringa, Moore, Barnes - "Procedure Writing: Principles and Practices" (Battelle Press, 1998)
-- Toyota TWI (Training Within Industry) - методология "Job Instruction"
-- McDonald's Operations Manual - канонический пример SOP-системы 600+ страниц для франшизы
+- Penn State Extension — "Standard Operating Procedures: A Writing Guide" (Richard Stup) — https://extension.psu.edu/standard-operating-procedures-a-writing-guide
+- Wieringa, Moore, Barnes — "Procedure Writing: Principles and Practices" (Battelle Press, 1998)
+- Toyota TWI (Training Within Industry) — the "Job Instruction" methodology
+- McDonald's Operations Manual — the canonical example of a 600+ page SOP system for a franchise

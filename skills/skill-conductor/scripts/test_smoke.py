@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = []
+# dependencies = ["pyyaml>=6.0"]
 # ///
 """Smoke tests for skill-conductor scripts.
 
@@ -25,7 +25,7 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
-UV_BIN = shutil.which("uv") or "/home/shima/.local/bin/uv"
+UV_BIN = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
 RESULTS = []
 
 
@@ -73,7 +73,7 @@ def make_bad_skill(tmp: Path) -> Path:
 def test_parse_good():
     sys.path.insert(0, str(SCRIPTS_DIR))
     try:
-        import utils
+        import utils  # pyright: ignore[reportMissingImports]  # resolved at runtime via sys.path.insert above
         with tempfile.TemporaryDirectory() as tmp:
             skill = make_good_skill(Path(tmp))
             name, desc, content = utils.parse_skill_md(skill)
@@ -87,7 +87,7 @@ def test_parse_good():
 def test_parse_no_frontmatter_raises():
     sys.path.insert(0, str(SCRIPTS_DIR))
     try:
-        import utils
+        import utils  # pyright: ignore[reportMissingImports]  # resolved at runtime via sys.path.insert above
         with tempfile.TemporaryDirectory() as tmp:
             skill = make_bad_skill(Path(tmp))
             try:
@@ -124,6 +124,74 @@ def test_eval_skill_bad_fails():
         combined = result.stdout + result.stderr
         assert result.returncode != 0 or "FAIL" in combined.upper() or "ERROR" in combined.upper(), \
             f"expected failure for bad skill, got: {combined[:300]}"
+
+
+def test_eval_skill_detects_secret_leak():
+    """Principle 9a: an env/secret in SKILL.md body must be flagged."""
+    with tempfile.TemporaryDirectory() as tmp:
+        skill = Path(tmp) / "leaky-skill"
+        skill.mkdir()
+        (skill / "SKILL.md").write_text(
+            "---\n"
+            "name: leaky-skill\n"
+            "description: A test skill. Use when testing leak detection. Do NOT use in prod.\n"
+            "---\n\n"
+            "# Leaky Skill\n\n"
+            "## Setup\n\n"
+            "export API_KEY=sk-abcdef0123456789ABCDEF\n"
+        )
+        result = subprocess.run(
+            [UV_BIN, "run", str(SCRIPTS_DIR / "eval_skill.py"), str(skill)],
+            capture_output=True, text=True, timeout=30,
+        )
+        combined = (result.stdout + result.stderr).lower()
+        assert "leak" in combined or "secret" in combined, \
+            f"expected secret-leak warning, got: {result.stdout[:400]}"
+        assert result.returncode != 0, "secret leak should fail the eval (non-zero exit)"
+
+
+def test_eval_skill_list_description_no_crash():
+    """A bracketed description parses as a YAML list — eval must fail gracefully, not crash."""
+    with tempfile.TemporaryDirectory() as tmp:
+        skill = Path(tmp) / "bracket-skill"
+        skill.mkdir()
+        (skill / "SKILL.md").write_text(
+            "---\n"
+            "name: bracket-skill\n"
+            "description: [TODO: fill this in]\n"
+            "---\n\n"
+            "# Bracket Skill\n\n## Usage\n\nTest.\n"
+        )
+        result = subprocess.run(
+            [UV_BIN, "run", str(SCRIPTS_DIR / "eval_skill.py"), str(skill)],
+            capture_output=True, text=True, timeout=30,
+        )
+        assert "Traceback" not in result.stderr, f"eval crashed: {result.stderr[:400]}"
+        assert "must be a string" in result.stdout, \
+            f"expected non-string description failure, got: {result.stdout[:400]}"
+
+
+def test_eval_skill_json_emits_all_det_ids():
+    """--json on skill-conductor itself emits every deterministic question id exactly once, well-formed."""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    try:
+        import eval_skill  # pyright: ignore[reportMissingImports]  # resolved at runtime via sys.path.insert
+        expected = set(eval_skill.DET_QUESTIONS.keys())
+    finally:
+        sys.path.pop(0)
+    result = subprocess.run(
+        [UV_BIN, "run", str(SCRIPTS_DIR / "eval_skill.py"), str(SKILL_DIR), "--json"],
+        capture_output=True, text=True, timeout=30,
+    )
+    records = json.loads(result.stdout)
+    ids = [r["id"] for r in records]
+    assert len(ids) == len(set(ids)), f"duplicate ids: {ids}"
+    assert set(ids) == expected, f"missing: {expected - set(ids)}; extra: {set(ids) - expected}"
+    required = {"id", "dimension", "text", "violation_example", "source", "critical", "answer", "explanation"}
+    for r in records:
+        assert r["source"] == "deterministic", f"non-deterministic record: {r['id']}"
+        assert set(r) >= required, f"record {r['id']} missing keys: {required - set(r)}"
+        assert r["answer"] in (0, 1), f"bad answer for {r['id']}: {r['answer']}"
 
 
 # --- quick_validate.py ---
@@ -210,6 +278,9 @@ def main():
     print("\neval_skill.py:")
     run("good skill passes", test_eval_skill_good_passes)
     run("bad skill fails", test_eval_skill_bad_fails)
+    run("detects secret leak", test_eval_skill_detects_secret_leak)
+    run("list description no crash", test_eval_skill_list_description_no_crash)
+    run("--json emits all DET ids", test_eval_skill_json_emits_all_det_ids)
 
     print("\nquick_validate.py:")
     run("good skill passes", test_quick_validate_good_passes)
