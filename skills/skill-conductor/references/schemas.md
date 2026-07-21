@@ -31,6 +31,7 @@ Defines the evals for a skill. Located at `evals/evals.json` within the skill di
 - `evals[].expected_output`: Human-readable description of success
 - `evals[].files`: Optional list of input file paths (relative to skill root)
 - `evals[].expectations`: List of verifiable statements
+- `evals[].category`: (additive, optional) Free-form stratum label (e.g. `"guard"`, `"saturated"`, `"core"`, `"hard-new"`) used by `scripts/split_evals.py` to stratify the train/held-out split
 
 ---
 
@@ -421,8 +422,40 @@ Output from Benchmark mode. Located at `benchmarks/<timestamp>/benchmark.json`.
   - `with_skill` / `without_skill`: Each contains `pass_rate`, `time_seconds`, `tokens` objects with `mean` and `stddev` fields
   - `delta`: Difference strings like `"+0.50"`, `"+13.0"`, `"+1700"`
 - `notes`: Freeform observations from the analyzer
+- `transitions`: (additive, optional) Assertion-level diff between two skill versions, produced by the gated self-update loop (Mode 2 Step 3). The viewer ignores it.
+
+```json
+"transitions": {
+  "parent_version": "v3.1",
+  "candidate_version": "v3.2",
+  "improved": [{ "eval_id": 8, "text": "Rewrite is >=20% shorter than the original" }],
+  "regressed": [],
+  "persistent_fail": [{ "eval_id": 2, "text": "..." }],
+  "stable_success_count": 47
+}
+```
+
+  - `improved` / `regressed` / `persistent_fail`: Lists of `{ eval_id, text }` where `text` is the assertion. `regressed` on a held-out eval means the candidate should have been rejected.
+  - `stable_success_count`: Count only — the list would be long and uninformative.
 
 **Important:** The viewer reads these field names exactly. Using `config` instead of `configuration`, or putting `pass_rate` at the top level of a run instead of nested under `result`, will cause the viewer to show empty/zero values. Always reference this schema when generating benchmark.json manually.
+
+---
+
+## split.json
+
+Frozen train/held-out split for the gated self-update loop. Located at the workspace root (e.g. `<workspace>/iteration-N/split.json`). Written by `scripts/split_evals.py --write`; never edited by hand and never regenerated after results have been seen.
+
+```json
+{
+  "skill_name": "example-skill",
+  "seed": 42,
+  "holdout": 0.4,
+  "train_ids": [2, 3, 4, 5, 8, 9, 12, 13, 14],
+  "heldout_ids": [1, 6, 7, 10, 11, 15],
+  "created_at": "2026-07-21T12:00:00+00:00"
+}
+```
 
 ---
 

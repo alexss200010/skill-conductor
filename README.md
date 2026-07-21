@@ -25,6 +25,16 @@ npx skills add smixs/skill-conductor
 ```
 
 <details>
+<summary><strong>v3.1.0 — Gated self-update: held-out gate + edit budget (SkillOpt core)</strong></summary>
+
+- **Held-out gate for body edits** — Mode 2 IMPROVE now splits evals into train/held-out (`scripts/split_evals.py`, deterministic, stratified by optional `evals[].category`). Lessons and edits come from TRAIN only; a candidate is accepted iff no held-out assertion regresses (flip-confirmation re-run for noise), train pass-rate strictly improves, and no new critical failure. Methodology borrowed from [microsoft/SkillOpt](https://github.com/microsoft/SkillOpt).
+- **Edit budget** — at most 3 atomic edits per iteration (one edit = one lesson, labeled); no wholesale rewrites, so gate rejections stay attributable.
+- **Case transitions** — assertion-level diff parent→candidate (improved / regressed / persistent-fail / stable-success) recorded as an additive `transitions` block in benchmark.json.
+- **Refactor** — `split_eval_set` generalized into `utils.split_evals(stratify_key=...)`; `run_loop.py` (Mode 5 OPTIMIZE) delegates to it, split unchanged bit-for-bit.
+
+</details>
+
+<details>
 <summary><strong>v3.0.0 — BinEval scoring, English canon, dual-channel install</strong></summary>
 
 - **BinEval evaluation** — replaces the old 5-axis 1-10 scoring with atomic binary yes/no questions across 5 dimensions (Discovery, Clarity, Structure, Robustness, Completeness). Each answer carries grounding evidence; the pass criterion is a **gate on critical questions**, not an opaque number. Adapted from *"Ask, Don't Judge"* ([arXiv 2606.27226](https://arxiv.org/abs/2606.27226)).

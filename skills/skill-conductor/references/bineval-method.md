@@ -43,15 +43,50 @@ Optional 50-pt display = `round(S * 50)`.
 
 The GATE — not the scalar `S` — is the pass criterion. A skill can score `S = 0.88` and still fail the gate if one critical question is `0`. Report both, but block on the gate.
 
-## Self-update loop (Mode 2 IMPROVE)
+## Gated self-update loop (Mode 2 IMPROVE)
 
-1. Generate questions.
-2. Evaluate → collect `failing[]`.
-3. Note-taker turns failing questions + explanations into generalized, deduped lessons.
-4. Apply targeted edits.
-5. Re-evaluate.
+Borrowed from SkillOpt (microsoft/SkillOpt): treat the skill document as trainable state, but accept an edit only when it survives evidence the editor never saw. Without this, edits are accepted by the same evals that produced them — which optimizes the skill for the test, not the task.
 
-**Terminate** when `failing[]` (or its critical subset) is empty, OR after 3 iterations. Keep the best result by `(gate_passed, then overall S)`. **Revert any edit that introduces a NEW failing question.**
+1. Freeze the train/held-out split (once per session).
+2. Run ALL evals → grade → collect `failing[]`.
+3. Note-taker turns TRAIN failing questions + explanations into generalized, deduped lessons.
+4. Apply a bounded set of edits (see Edit budget).
+5. Re-run ALL evals → apply the gate → record case transitions.
+
+**Terminate** when train `failing[]` (or its critical subset) is empty, OR after 3 iterations. Keep the best ACCEPTED version by `(held-out pass-rate, then train pass-rate)`. **Revert any edit that introduces a NEW failing question** — under the gate this is automatic for critical questions (condition c) and advisory for the rest.
+
+### Held-out gate
+
+Split the eval set once per session with `scripts/split_evals.py` (deterministic: fixed seed, items sorted by id, stratified by the optional `category` field). Freeze the split to `split.json` in the workspace BEFORE looking at any results, and never re-split afterwards — choosing a split after seeing scores is choosing the answer.
+
+Discipline: lessons and edits are formed from TRAIN transcripts and gradings only. Held-out grading files are opened exactly once per iteration — at the accept/reject step. The directories are flat, so nothing enforces this technically; the rule is the enforcement.
+
+**Accept a candidate iff all three hold:**
+
+- **(a) No held-out regression.** No held-out assertion flips pass→fail versus the parent version. Assertion-level, not aggregate — an aggregate score can hide a regression compensated by an improvement elsewhere. Single runs are noisy: before rejecting on a flip, re-run just that flipped cell once; reject only if the flip reproduces.
+- **(b) Train strictly improves.** Train pass-rate must exceed the parent's — otherwise the edits didn't do their job.
+- **(c) No new critical failure.** No NEW failing critical BinEval question (the GATE above still applies).
+
+Why not "strict improvement on held-out" (the original SkillOpt criterion)? With 5–8 held-out cases, edits formed from train failures will often have nothing to fix on held-out — demanding held-out gains at that scale measures luck, not overfit. Held-out is the tripwire against regressions, not the scoreboard.
+
+### Edit budget
+
+At most **3 atomic edits** per iteration. Atomic = one coherent lesson applied in one place: a rule, a paragraph, a table row. An edit that touches a SKILL.md line AND its expanded entry in references/ for the same lesson counts as one. Label each edit with its lesson.
+
+No wholesale rewrites. With ≤3 edits, a gate rejection is attributable: drop one edit, re-run, and the culprit is visible. A rewritten skill that fails the gate teaches nothing.
+
+### Case transitions
+
+Diff the parent's and candidate's grading assertion-by-assertion into four categories:
+
+| Category | Parent → Candidate | Meaning |
+|---|---|---|
+| improved | fail → pass | the edit worked |
+| regressed | pass → fail | warning even when the gate passes (train) or reject fuel (held-out) |
+| persistent-fail | fail → fail | fuel for the next iteration |
+| stable-success | pass → pass | counted, not listed |
+
+Record as the `transitions` block in benchmark.json (see `references/schemas.md`).
 
 ## Fixed bank vs generated questions
 

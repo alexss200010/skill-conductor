@@ -35,7 +35,7 @@ Detect mode from context. If ambiguous, ask.
 | Mode        | When                                             | What happens                                                    |
 | ----------- | ------------------------------------------------ | --------------------------------------------------------------- |
 | 1. CREATE   | "build a skill", "new skill for..."              | Full lifecycle: intent → architecture → scaffold → write → test |
-| 2. IMPROVE  | "fix this skill", "it doesn't trigger"           | Diagnose → eval loop → self-update loop → iterate               |
+| 2. IMPROVE  | "fix this skill", "it doesn't trigger"           | Diagnose → eval loop → gated self-update → iterate              |
 | 3. VALIDATE | "test this skill", "run evals"                   | Structural checks + trigger testing + BinEval scoring           |
 | 4. REVIEW   | "review this skill", third-party assessment      | 11-point quality gate, quick and focused                        |
 | 5. OPTIMIZE | "improve triggering", "description optimization" | Automated description optimization with train/test split        |
@@ -248,15 +248,17 @@ The improvement cycle mirrors CREATE Step 6, but focused on the broken behavior:
    - **Headless/Cowork:** use `--static <output.html>` instead of live server
 5. Review, provide feedback, iterate
 
-### Step 3: Self-Update Loop
+### Step 3: Gated Self-Update Loop
 
-Drive iteration off failing BinEval questions, not taste. Run the loop:
+Drive iteration off failing BinEval questions, not taste — and accept edits only against evidence the editor never saw. Full rules: `references/bineval-method.md` § Gated self-update loop.
 
-1. Generate questions and evaluate the skill (see Mode 3 Stage 3 + `references/bineval-method.md`) → collect `failing[]`
-2. Spawn `agents/analyzer.md` as note-taker: turn the failing questions + their explanations into generalized, deduped lessons (not one-off patches for a single test case)
-3. Apply targeted edits addressing those lessons
-4. Re-evaluate. **Revert any edit that introduces a NEW failing question.**
-5. Terminate when `failing[]` (or its critical subset) is empty, or after 3 iterations. Keep the best result by `gate_passed` first, then overall S.
+1. **Freeze the split once per session:** `uv run scripts/split_evals.py evals/evals.json --holdout 0.4 --write <workspace>/split.json` — deterministic, stratified by the optional per-eval `category`. Never re-split after seeing results
+2. Run ALL evals on the current version and grade (see Mode 3 Stage 3 + `references/bineval-method.md`) → collect `failing[]`
+3. Analyze failures on TRAIN cases only: spawn `agents/analyzer.md` with train transcripts + gradings to produce generalized, deduped lessons. Held-out grading stays unopened until the gate
+4. Apply **at most 3 atomic edits** (add/delete/replace one rule, paragraph, or table row; one edit = one lesson, labeled). No wholesale rewrites — small diffs keep cause and effect attributable at the gate
+5. Re-run ALL evals. **Gate — accept iff:** (a) no held-out assertion flips pass→fail vs the parent (re-run a flipped cell once to confirm before rejecting — single runs are noisy); (b) train pass-rate strictly improves; (c) no NEW failing critical question. Held-out improvement is welcome but not required — with 5–8 held-out cases, demanding it measures luck
+6. Record per-assertion transitions (improved / regressed / persistent-fail / stable-success) → `transitions` block in benchmark.json
+7. Terminate when train `failing[]` (or its critical subset) is empty, or after 3 iterations. Keep the best ACCEPTED version by held-out pass-rate, then train pass-rate
 
 ### Step 3b: Blind Comparison (optional, for major changes)
 
@@ -348,7 +350,7 @@ The checklist exists because these are the failure modes that actually happen in
 
 ## Mode 5: OPTIMIZE
 
-Automated description optimization. The description competes with other skills for Claude's attention — optimization finds the wording that triggers most accurately.
+Automated description optimization. The description competes with other skills for Claude's attention — optimization finds the wording that triggers most accurately. The same train/held-out principle now gates body edits too — see Mode 2 Step 3.
 
 ### How it works
 
