@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/conductor.png" alt="Skill Conductor" width="100%">
+</p>
+
 # Skill Conductor
 
 > A skill that creates, evaluates, and improves other skills. Meta-level.
