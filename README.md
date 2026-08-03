@@ -29,6 +29,21 @@ npx skills add smixs/skill-conductor
 ```
 
 <details>
+<summary><strong>v3.2.0 — Evidence-based upgrade: form-matching, judge calibration, pressure testing</strong></summary>
+
+- **Principle #10: Match the form to the failure** — classify the baseline failure before writing a rule; prohibitions bulletproof discipline failures but measurably backfire on shaping failures (obra/superpowers wording tests + Guardrails polarity data). Plus: no nuance clauses, exemption clauses don't scope.
+- **Critique-before-verdict judges** — all three eval agents (grader, comparator, bineval) now write the detailed evidence critique BEFORE committing to the 1/0 verdict, with a borderline few-shot example in each (Hamel Husain's judge methodology).
+- **Threshold-blind judging** — the BinEval judge no longer computes the overall score or the GATE; the orchestrator aggregates. A judge that knows the bar is biased toward it.
+- **Automatic cross-family judge calibration** — a second judge from a different model family answers the same bank; stable disagreement flags a badly worded question, not a dispute. Self-preference-bias guard on final acceptance.
+- **Variance discipline** — improvements on non-critical questions count only when they reproduce in 2 consecutive runs; the 3-iteration cap now carries its STICK rationale.
+- **`references/pressure-testing.md`** — micro-test protocol (no-guidance control, 5+ reps, variance as a metric) + pressure scenarios for discipline skills (7 pressure types, forced A/B/C choice, rationalization tables).
+- **Pushy description formula** — `[What] + Use when [4-5 phrasings] + "even if they don't explicitly say '<canonical term>'" + Do NOT use for [...]`, deduped to a single canonical home in Principle #2.
+- **Question bank v1.1** — 5 new questions: pushy triggers, nuance clauses, directive reference loading, time-rot language, redundant-content (E:A:R).
+- **Self-hosted proof** — this release was produced by Conductor evaluating and improving itself: 3 gated iterations, dual-family judges (Claude + GPT via codex), all critical questions passing.
+
+</details>
+
+<details>
 <summary><strong>v3.1.0 — Gated self-update: held-out gate + edit budget (SkillOpt core)</strong></summary>
 
 - **Held-out gate for body edits** — Mode 2 IMPROVE now splits evals into train/held-out (`scripts/split_evals.py`, deterministic, stratified by optional `evals[].category`). Lessons and edits come from TRAIN only; a candidate is accepted iff no held-out assertion regresses (flip-confirmation re-run for noise), train pass-rate strictly improves, and no new critical failure. Methodology borrowed from [microsoft/SkillOpt](https://github.com/microsoft/SkillOpt).
@@ -84,18 +99,34 @@ Anthropic [updated their skill-creator](https://claude.com/blog/improving-skill-
 
 1. **[Anthropic Skill Creator](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/skill-creator)** — eval infrastructure, grader/comparator/analyzer agents, benchmark pipeline
 2. **[The Complete Guide to Building Skills for Claude](https://claude.com/blog/complete-guide-to-building-skills-for-claude)** — architecture patterns, success metrics
-3. **[Superpowers / writing-skills](https://github.com/obra/superpowers/blob/main/skills/writing-skills/SKILL.md)** by Jesse Vincent — TDD approach, the "description trap" discovery
+3. **[Superpowers / writing-skills](https://github.com/obra/superpowers/blob/main/skills/writing-skills/SKILL.md)** by Jesse Vincent — TDD approach, the "description trap" discovery, match-the-form-to-the-failure, the micro-test protocol, pressure scenarios and rationalization tables
 4. **[Skills Best Practices](https://github.com/mgechev/skills-best-practices)** by Minko Gechev — three-stage LLM validation, eval methodology
+5. **[hamelsmu/evals-skills](https://github.com/hamelsmu/evals-skills)** by Hamel Husain — critique-before-verdict judge outputs, borderline few-shot examples, judge calibration discipline
+6. **[grafana/skills — skill-authoring](https://github.com/grafana/skills)** — the pushy description pattern in production, judge score-variance discipline ("three consecutive local passes before shipping")
+7. **[softaworks/agent-toolkit — skill-judge](https://github.com/softaworks/agent-toolkit)** — the Expert/Activation/Redundant knowledge-delta taxonomy, directive loading triggers, the freedom-consequence test
+8. **[neolabhq/context-engineering-kit](https://github.com/neolabhq/context-engineering-kit)** — threshold-blind judges (never tell the judge the bar)
+9. **[trailofbits/skills — skill-improver](https://github.com/trailofbits/skills)** — the stop-hook pattern for unattended improvement loops (referenced, not implemented)
 
 ### Methodology foundations
 
-The 9 authoring principles and the BinEval scoring draw on established procedure-writing and evaluation research:
+The 10 authoring principles and the BinEval scoring draw on established procedure-writing and evaluation research:
 
 - **[Standard Operating Procedures: A Writing Guide](https://extension.psu.edu/standard-operating-procedures-a-writing-guide)** — Richard Stup, Penn State Extension. Format selection, hierarchical vs. flowchart procedures.
 - **[Procedure Writing: Principles and Practices](https://books.google.com/books/about/Procedure_Writing.html?id=Tm5RAAAAMAAJ)** — Wieringa, Moore & Barnes (Battelle Press, 1998). Imperative steps, removing modal weasel-words.
 - **[Toyota TWI (Training Within Industry)](https://www.allaboutlean.com/wp-content/uploads/2019/01/TWI_Job_Instruction_Manual.pdf)** — the "Job Instruction" method: step → key point → why; the 5 Whys root-cause practice ([Job Methods manual](https://www.allaboutlean.com/wp-content/uploads/2019/01/TWI_Job_Methods_Manual.pdf), [The Roots of Lean](https://www.lean.org/downloads/105.pdf)).
 - **McDonald's Operations Manual** — the canonical 600+ page SOP system; checklists at the point of use. The manual itself is proprietary; it is documented in John F. Love's [*McDonald's: Behind the Arches*](https://archive.org/details/mcdonaldsbehinda0000love).
 - **[Ask, Don't Judge: Binary Questions for Interpretable LLM Evaluation and Self-Improvement](https://arxiv.org/abs/2606.27226)** — the BinEval method behind Conductor's evaluation.
+
+And on recent empirical LLM-agent research (what each contributed):
+
+- **[Guardrails Beat Guidance](https://arxiv.org/abs/2604.11088)** (5000+ Claude Code runs on SWE-bench) — rule polarity: helpful rules are negative constraints, harmful ones positive directives → Principle #10.
+- **[TICK: Generated Checklists Improve LLM Evaluation and Generation](https://arxiv.org/abs/2410.03608)** — checklist as spec + eval + feedback; refinement plateaus and degrades past 3–4 iterations → the 3-iteration cap.
+- **[CheckEval](https://arxiv.org/abs/2403.18771)** and **[Prosa](https://arxiv.org/abs/2605.01630)** — binary decomposition makes judges reproducible across model families → cross-family judge calibration.
+- **[Self-Preference Bias in Rubric-Based Evaluation](https://arxiv.org/abs/2604.06996)** — judges favor their own family even on binary rubrics → the out-of-family acceptance rule.
+- **[LLMs Cannot Self-Correct Reasoning Yet](https://arxiv.org/abs/2310.01798)** and **[BIG-Bench Mistake](https://arxiv.org/abs/2311.08516)** — self-correction needs an external gate; models fix errors well only when an external checker locates them → the gated self-update loop.
+- **[SkillJuror](https://arxiv.org/abs/2606.11543)** — progressive disclosure with explicit loading triggers beats both flat files and passive reference lists → directive loading rules.
+- **[SkillReducer](https://arxiv.org/abs/2603.29919)** — >60% of public skill-body text changes no agent behavior → the actionability test in Principle #9.
+- **[IFScale](https://arxiv.org/abs/2507.11538)** and **[Prompt Design at Scale](https://arxiv.org/abs/2607.19257)** — compliance collapses near 80 simultaneous rules; format matters less than rule count → the rule budget and MOC structure.
 
 ## 6 Modes
 
@@ -166,6 +197,7 @@ skills/
     │   ├── sop-practices.md
     │   ├── bineval-method.md
     │   ├── quality-questions.md
+    │   ├── pressure-testing.md
     │   └── runtime-setup.md
     ├── assets/
     │   └── eval_review.html
