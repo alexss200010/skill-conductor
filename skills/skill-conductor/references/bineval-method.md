@@ -15,9 +15,9 @@ A good question is answerable from the artifact alone, has an unambiguous yes/no
 
 ## Binary evaluation
 
-Each question gets:
+Each question gets, in this order:
+- `explanation`: the critique — evidence grounding the answer (quote a line, cite a count, name the missing section). Written and emitted BEFORE the answer, so the judge articulates its assessment before committing to a verdict. Evidence is mandatory; an answer without evidence is not auditable.
 - `answer`: `1` (yes/satisfied) or `0` (no/violated) — no middle values.
-- `explanation`: evidence grounding the answer (quote a line, cite a count, name the missing section). Evidence is mandatory; an answer without evidence is not auditable.
 
 Deterministic checks come from `scripts/eval_skill.py --json` (the sole emitter, ids `DET-*`). LLM-judged questions come from the two-step meta-prompt (`source: "llm"`).
 
@@ -43,6 +43,27 @@ Optional 50-pt display = `round(S * 50)`.
 
 The GATE — not the scalar `S` — is the pass criterion. A skill can score `S = 0.88` and still fail the gate if one critical question is `0`. Report both, but block on the gate.
 
+**The ORCHESTRATOR computes the overall score and the gate**, after the judge returns its answers. The judge emits only `questions[]` (each with the critique before the 1/0 answer), `dimension_scores`, and `failing[]`.
+
+**NEVER pass acceptance thresholds or GATE criteria into judge prompts** — a judge that knows the bar is biased toward it, nudging borderline answers to whichever side clears the threshold. Aggregation is a separate step from judgment precisely so the judgment stays uncontaminated.
+
+## Judge calibration (automatic, no human labels)
+
+Calibrate the question bank against a second, independent judge from a **different model family**. No human labels anywhere in this loop — the two judges calibrate the questions, not each other.
+
+- **Channel.** Run the second judge through `codex exec` with a GPT model. Fallback: any API access to a non-Anthropic model (e.g. OpenRouter). Same artifact, same question bank, same prompt — only the model family differs.
+- **Metric.** Per-question agreement between the two judges. Compare answers question by question; never average them into one score.
+- **What a disagreement means.** On binary rubrics, judges from different families converge on the same answers (Prosa, arXiv 2605.01630; CheckEval, arXiv 2403.18771). So a question where the judges disagree **stably** — the disagreement reproduces across 2 runs — is a badly worded question, not a dispute between judges. Send it back for rewording in `references/quality-questions.md`; splitting the difference or averaging the two answers hides the defect that produced them.
+- **Self-preference rule.** A judge scores models from its own family higher, and the bias survives the binary paradigm (arXiv 2604.06996). When accepting a skill version as final, at least one judge must come from outside the family of the model that wrote the edits.
+
+## Variance discipline
+
+An LLM judge drifts run to run on unchanged input. In Grafana's production skill-authoring loop a 0–100 judge swings 7–10 points — "local 94 commonly lands at CI 85" — which is enough to manufacture an improvement that never happened.
+
+- **Two consecutive runs, or it didn't happen.** Accept an improvement on a non-critical question only when it reproduces in 2 consecutive runs. One flip is noise until it repeats.
+- **Same standard on the reject side.** A held-out assertion that flips pass→fail counts as a regression only when the flip reproduces in 2 consecutive runs of that cell (Held-out gate, condition (a)).
+- Critical questions are exempt in the blocking direction only: a critical `0` fails the GATE on the spot. It is the *improvement* claim that has to earn a second confirming run.
+
 ## Gated self-update loop (Mode 2 IMPROVE)
 
 Borrowed from SkillOpt (microsoft/SkillOpt): treat the skill document as trainable state, but accept an edit only when it survives evidence the editor never saw. Without this, edits are accepted by the same evals that produced them — which optimizes the skill for the test, not the task.
@@ -51,9 +72,9 @@ Borrowed from SkillOpt (microsoft/SkillOpt): treat the skill document as trainab
 2. Run ALL evals → grade → collect `failing[]`.
 3. Note-taker turns TRAIN failing questions + explanations into generalized, deduped lessons.
 4. Apply a bounded set of edits (see Edit budget).
-5. Re-run ALL evals → apply the gate → record case transitions.
+5. Re-run ALL evals → the orchestrator applies the gate to the returned answers → record case transitions.
 
-**Terminate** when train `failing[]` (or its critical subset) is empty, OR after 3 iterations. Keep the best ACCEPTED version by `(held-out pass-rate, then train pass-rate)`. **Revert any edit that introduces a NEW failing question** — under the gate this is automatic for critical questions (condition c) and advisory for the rest.
+**Terminate** when train `failing[]` (or its critical subset) is empty, OR after 3 iterations. The cap is not arbitrary: checklist-guided refinement plateaus and then degrades past the 3rd–4th pass (STICK, arXiv 2410.03608) — later iterations edit for the sake of editing. Keep the best ACCEPTED version by `(held-out pass-rate, then train pass-rate)`. **Revert any edit that introduces a NEW failing question** — under the gate this is automatic for critical questions (condition c) and advisory for the rest.
 
 ### Held-out gate
 
@@ -63,7 +84,7 @@ Discipline: lessons and edits are formed from TRAIN transcripts and gradings onl
 
 **Accept a candidate iff all three hold:**
 
-- **(a) No held-out regression.** No held-out assertion flips pass→fail versus the parent version. Assertion-level, not aggregate — an aggregate score can hide a regression compensated by an improvement elsewhere. Single runs are noisy: before rejecting on a flip, re-run just that flipped cell once; reject only if the flip reproduces.
+- **(a) No held-out regression.** No held-out assertion flips pass→fail versus the parent version. Assertion-level, not aggregate — an aggregate score can hide a regression compensated by an improvement elsewhere. Single runs are noisy: a flip counts only once it reproduces in 2 consecutive runs of that cell (see Variance discipline).
 - **(b) Train strictly improves.** Train pass-rate must exceed the parent's — otherwise the edits didn't do their job.
 - **(c) No new critical failure.** No NEW failing critical BinEval question (the GATE above still applies).
 
@@ -92,7 +113,7 @@ Record as the `transitions` block in benchmark.json (see `references/schemas.md`
 
 - **Fixed bank → skill-artifact quality.** Stable, reusable questions (deterministic `DET-*` + curated bank). Use when evaluating the skill itself: structure, discovery, robustness are largely the same across skills, so fixed questions give comparable, repeatable scores.
 - **Generated → output quality.** Run the two-step meta-prompt against the eval output, because correctness criteria are task-specific and can't be pre-listed.
-- **Hybrid** (`question_source: "hybrid"`): deterministic + bank + generated together — the default for a full skill eval.
+- **Hybrid** (`question_source: "hybrid"`): deterministic + the fixed bank — the default for scoring a skill-artifact. Generated questions never mix into artifact scoring; they live in output grading.
 
 ## Limitation: over-decomposition
 

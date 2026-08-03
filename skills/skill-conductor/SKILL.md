@@ -2,10 +2,12 @@
 name: skill-conductor
 description: >
   Create, edit, evaluate, and package agent skills. Use when building a new
-  skill from scratch, improving an existing skill, running evals to test a
-  skill, benchmarking skill performance, optimizing a skill's description
-  for better triggering, reviewing third-party skills for quality, or
-  packaging skills for distribution. Not for using skills or general coding
+  skill from scratch, improving an existing skill, fixing a skill that never
+  triggers or fires unreliably, running evals to test a skill, benchmarking
+  skill performance, optimizing a skill's description, reviewing third-party
+  skills for quality, or packaging skills for distribution — even if the user
+  doesn't explicitly say "skill" (e.g. "teach Claude to do X", "make the
+  agent always follow Y"). Not for using skills or general coding
   tasks.
 ---
 
@@ -87,7 +89,9 @@ Choose degrees of freedom — this determines how much control vs. flexibility t
 | Medium (pseudocode) | preferred pattern exists, some variation ok | data processing         |
 | High (text)         | multiple valid approaches, judgment needed  | design decisions        |
 
-**Golden rule: read `references/sop-practices.md` before authoring or reviewing ANY skill.** It holds the canonical **9 authoring principles** (universal): pre-flight, no-process-in-description, MOC (SKILL.md = map, not prose), fresh-practitioner author, TWI "why", blind-agent test, inline checklists, one-term-per-concept, cut-the-fat (env/keys OUT of SKILL.md). For **procedural** skills (business process with branching: request, quote, onboarding, escalation) the same file also has the deep SOP methodology — format selection, 7-step process, procedural checklist.
+**Freedom test:** ask "if the agent makes a mistake here, what is the consequence?" High consequence → low freedom (an exact script it must not modify). Low consequence → high freedom (prose, let it judge). Calibrate per step, not per skill — one skill can hold both.
+
+**Golden rule: read `references/sop-practices.md` before authoring or reviewing ANY skill.** It holds the canonical **10 authoring principles** (universal): pre-flight, no-process-in-description, MOC (SKILL.md = map, not prose), fresh-practitioner author, TWI "why", blind-agent test, inline checklists, one-term-per-concept, cut-the-fat (env/keys OUT of SKILL.md), match-the-form-to-the-failure. For **procedural** skills (business process with branching: request, quote, onboarding, escalation) the same file also has the deep SOP methodology — format selection, 7-step process, procedural checklist.
 
 ### Step 4: Scaffold
 
@@ -113,25 +117,16 @@ skill-name/
 ---
 name: kebab-case-name
 description: >
-  [Purpose in one sentence]. Use when [triggers].
-  Do NOT use for [negative triggers].
+  [What it does]. Use when [4-5 phrasing variations users actually say] — even
+  if they don't explicitly say "[canonical term]". Do NOT use for [negatives].
 ---
 ```
 
-The description is the single most important line. It determines whether the skill gets triggered at all. Rules:
+The description is the single most important line — it decides whether the skill triggers at all. The full formula, the pushy clause and worked GOOD/BAD examples live in `references/sop-practices.md` Principle #2. Read it before writing one.
 
 - `name`: lowercase, digits, hyphens only. No consecutive hyphens. Matches folder name. Max 64 chars
 - `description`: max 1024 chars. No angle brackets. No process/workflow steps
-- Start with purpose, then "Use when...", then "Do NOT use for..."
 - **Don't put workflow in the description** — tested: when the description lists process steps, the agent follows it and skips the body entirely
-
-```yaml
-# GOOD: purpose + triggers, no process
-description: Analyze Figma design files for developer handoff. Use when user uploads .fig files or asks for "design specs". Do NOT use for Sketch or Adobe XD.
-
-# BAD: process in description (agent skips body)
-description: Exports Figma assets, generates specs, creates Linear tasks, posts to Slack.
-```
 
 #### Body structure
 
@@ -171,6 +166,8 @@ Error: [message] → Cause: [why] → Fix: [how]
 ### Step 6: Test Cases & Eval Loop
 
 This is the critical step — most failures hide here. Treat it as three sub-phases.
+
+Before the full loop, micro-test the wording of anything you just wrote (5+ fresh-context reps, always with a no-guidance control) → `references/pressure-testing.md`. For a discipline skill — one that makes the agent follow a rule it's tempted to break — a pressure scenario from that file is mandatory, not optional.
 
 #### 6a. Pre-flight (before spawning anything)
 
@@ -235,11 +232,11 @@ Read the existing SKILL.md completely. Identify the problem class:
 2. **Keep the prompt lean.** Read transcripts, not just outputs. If the skill makes the model waste time on unproductive steps, remove those instructions and see what happens
 3. **Explain the why.** LLMs have good theory of mind. Instead of ALWAYS/NEVER in caps, explain the reasoning — it's more powerful and robust. If you're writing rigid rules, reframe as explanations
 4. **Look for repeated work.** If all test runs independently write the same helper script, bundle it in `scripts/`. Saves every future invocation from reinventing the wheel
-5. **Apply the authoring canon.** Read `references/sop-practices.md` — the 9 canonical principles (universal) map directly to skill failure modes: process leaking into description, SKILL.md bloated instead of a map, env/keys inlined, silent improvisation from missing "why", missed edge cases, agents skipping end-of-doc checklists. For process skills (ticket, quote, escalation) also apply the deep SOP methodology in the same file
+5. **Apply the authoring canon.** Read `references/sop-practices.md` — the 10 canonical principles (universal) map directly to skill failure modes: process leaking into description, SKILL.md bloated instead of a map, env/keys inlined, silent improvisation from missing "why", missed edge cases, agents skipping end-of-doc checklists, a rule whose form doesn't match its failure. For process skills (ticket, quote, escalation) also apply the deep SOP methodology in the same file
 
 ### Step 2: Eval Iteration Loop
 
-The improvement cycle mirrors CREATE Step 6, but focused on the broken behavior:
+The improvement cycle mirrors CREATE Step 6, but focused on the broken behavior. Micro-test each candidate wording before it enters the loop, and re-run the pressure scenarios if the skill enforces a rule → `references/pressure-testing.md`.
 
 1. Run the failing case with current skill → document failure
 2. Apply fix using writing rules from CREATE Step 5
@@ -256,7 +253,7 @@ Drive iteration off failing BinEval questions, not taste — and accept edits on
 2. Run ALL evals on the current version and grade (see Mode 3 Stage 3 + `references/bineval-method.md`) → collect `failing[]`
 3. Analyze failures on TRAIN cases only: spawn `agents/analyzer.md` with train transcripts + gradings to produce generalized, deduped lessons. Held-out grading stays unopened until the gate
 4. Apply **at most 3 atomic edits** (add/delete/replace one rule, paragraph, or table row; one edit = one lesson, labeled). No wholesale rewrites — small diffs keep cause and effect attributable at the gate
-5. Re-run ALL evals. **Gate — accept iff:** (a) no held-out assertion flips pass→fail vs the parent (re-run a flipped cell once to confirm before rejecting — single runs are noisy); (b) train pass-rate strictly improves; (c) no NEW failing critical question. Held-out improvement is welcome but not required — with 5–8 held-out cases, demanding it measures luck
+5. Re-run ALL evals. **Gate — accept iff:** (a) no held-out assertion flips pass→fail vs the parent (a flip counts only once it reproduces in 2 consecutive runs — single runs are noisy); (b) train pass-rate strictly improves; (c) no NEW failing critical question. Held-out improvement is welcome but not required — with 5–8 held-out cases, demanding it measures luck
 6. Record per-assertion transitions (improved / regressed / persistent-fail / stable-success) → `transitions` block in benchmark.json
 7. Terminate when train `failing[]` (or its critical subset) is empty, or after 3 iterations. Keep the best ACCEPTED version by held-out pass-rate, then train pass-rate
 
@@ -303,16 +300,16 @@ uv run scripts/run_eval.py --eval-set <path> --skill-path <path> --runs-per-quer
 
 ### Stage 3: BinEval Scoring
 
-Evaluate with atomic binary yes/no questions across 5 dimensions — each answered 1/0 with evidence. See `references/bineval-method.md` for the method, `references/quality-questions.md` for the question bank, and `agents/bineval.md` for the evaluator that emits `bineval.json`.
+Evaluate with atomic binary yes/no questions across 5 dimensions — each answered 1/0 after a written critique citing evidence. See `references/bineval-method.md` for the method, `references/quality-questions.md` for the question bank, and `agents/bineval.md` for the evaluator that emits `bineval.json`.
 
 The 5 dimensions: **Discovery, Clarity, Structure, Robustness, Completeness**.
 
-Questions come from two sources:
+Questions for the skill-artifact come from two sources (`question_source: "hybrid"`):
 
 - **Deterministic** — emitted by `scripts/eval_skill.py --json` (the sole emitter), e.g. `DET-STRUCT-SKILLMD-EXISTS`, `DET-DISCOVERY-DESC-PRESENT`. Some are flagged critical.
-- **Generated** — per-skill binary questions via the two-step meta-prompt (summarize the skill into requirements → decompose each into ≥1 yes/no question with a violation example).
+- **Fixed bank** — the versioned llm questions in `references/quality-questions.md`; the judge answers them, never invents its own. (Generated per-task questions via the two-step meta-prompt belong to output grading in Modes 1–2, `agents/grader.md` — not to artifact scoring.)
 
-Aggregate: per-dimension `dimension_scores` S_d = mean of that dimension's answers; overall S = mean of all answers.
+The judge only answers the questions. YOU aggregate: per-dimension `dimension_scores` S_d = mean of that dimension's answers; overall S = mean of all answers. Never put the bands or the GATE into a judge prompt — a judge that knows the bar is biased toward it (`references/bineval-method.md`).
 
 **Display bands:** S≥0.90 production-ready · 0.70–0.89 solid · 0.50–0.69 needs-work · <0.50 rewrite.
 
@@ -373,7 +370,7 @@ Queries must be realistic — concrete, detailed, with file paths, context, abbr
 uv run scripts/run_loop.py \
   --eval-set evals/eval_set.json \
   --skill-path <skill-dir> \
-  --model claude-sonnet-4-20250514 \
+  --model <model-id> \
   --max-iterations 5 \
   --holdout 0.4 \
   --verbose
@@ -381,10 +378,10 @@ uv run scripts/run_loop.py \
 
 The loop:
 
-- Splits queries into train (60%) and test (40%) to prevent overfitting
+- Splits queries into train (60%) and held-out (40%) to prevent overfitting
 - Each iteration: evaluates current description → Claude proposes improvement → re-evaluates
-- Improvement model sees only train results (blinded to test)
-- Selects the best description by test score
+- Improvement model sees only train results (blinded to held-out)
+- Selects the best description by held-out score
 - Opens live HTML report automatically
 
 ### Supporting scripts
@@ -445,11 +442,11 @@ Creates `skill-name.skill` (zip with .skill extension). Verify: unzip in temp di
 
 ### Description formula
 
-```
-[What it does] + Use when [triggers, file types, symptoms]. + Do NOT use for [negatives].
-```
+`[What it does]` + `Use when [4-5 phrasings users actually say]` + `even if they don't explicitly say "<canonical term>"` + `Do NOT use for [negatives]` — full rules and examples in `references/sop-practices.md` Principle #2.
 
 ## Reference Files
+
+Load on demand, at the point of use named in each mode — never wholesale. Load an `agents/*` file only at the step that spawns that agent; load `references/schemas.md` only when writing or reading a JSON artifact. Everything else stays unloaded.
 
 | Path                             | What's inside                              |
 | -------------------------------- | ------------------------------------------ |
@@ -461,7 +458,8 @@ Creates `skill-name.skill` (zip with .skill extension). Verify: unzip in temp di
 | `references/schemas.md`          | JSON schemas for evals, grading, benchmark |
 | `references/bineval-method.md`   | BinEval method: dimensions, scoring, GATE  |
 | `references/quality-questions.md`| BinEval question bank (deterministic + bank)|
-| `references/sop-practices.md`    | **Canon: 9 authoring principles (universal)** + deep SOP methodology for procedural skills |
+| `references/pressure-testing.md` | Micro-tests for wording + pressure scenarios for discipline skills |
+| `references/sop-practices.md`    | **Canon: 10 authoring principles (universal)** + deep SOP methodology for procedural skills |
 | `references/runtime-setup.md`    | Pre-flight: uv/env/path checks, LLM-access options |
 | `eval-viewer/`                   | Interactive HTML viewer for eval results   |
 | `assets/eval_review.html`        | Trigger eval set editor                    |

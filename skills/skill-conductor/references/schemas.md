@@ -93,14 +93,14 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
     {
       "text": "The output includes the name 'John Smith'",
       "dimension": "Completeness",
-      "passed": true,
-      "evidence": "Found in transcript Step 3: 'Extracted names: John Smith, Sarah Johnson'"
+      "evidence": "Found in transcript Step 3: 'Extracted names: John Smith, Sarah Johnson', and summary.md lists it as the primary contact with the matching phone from the input.",
+      "passed": true
     },
     {
       "text": "The spreadsheet has a SUM formula in cell B10",
       "dimension": "Robustness",
-      "passed": false,
-      "evidence": "No spreadsheet was created. The output was a text file."
+      "evidence": "No spreadsheet was created. outputs/ contains only report.txt and no spreadsheet tool appears in the transcript.",
+      "passed": false
     }
   ],
   "summary": {
@@ -167,7 +167,7 @@ Output from the grader agent. Located at `<run-dir>/grading.json`.
 
 **Fields:**
 
-- `expectations[]`: Graded expectations with evidence. Framed as GENERATED binary yes/no questions (via the two-step Summarize→Decompose meta-prompt). Backward-compatible fields `text`, `passed`, `evidence` are retained; **`dimension`** (one of the 5 dimensions) is added to each entry.
+- `expectations[]`: Graded expectations with evidence. Framed as GENERATED binary yes/no questions (via the two-step Summarize→Decompose meta-prompt). Backward-compatible fields `text`, `passed`, `evidence` are retained; **`dimension`** (one of the 5 dimensions) is added to each entry. Field order is critique-before-verdict: `evidence` (the detailed critique citing concrete evidence) is written and emitted BEFORE `passed`, so the grader articulates its assessment before committing to a decision.
 - `summary`: Aggregate pass/fail counts
 - `dimension_scores`: (additive) Per-dimension `{ score, passed, total }`, where `score` = mean of that dimension's binary answers in [0,1]
 - `failing[]`: (additive) The subset of expectations answered "no" (`passed: false`), each with `text`, `dimension`, `evidence`
@@ -185,7 +185,7 @@ The `dimension`, `dimension_scores`, and `failing[]` fields are purely additive 
 
 Output from BinEval evaluation (`agents/bineval.md` emits it). Located at `<run-dir>/bineval.json`.
 
-BinEval replaces numeric/holistic quality scoring with atomic binary yes/no questions per dimension. Each question is answered `1` (yes = satisfied) or `0` (no = violated) WITH evidence, then aggregated to a score in [0,1].
+BinEval replaces numeric/holistic quality scoring with atomic binary yes/no questions per dimension. Each question carries a critique (`explanation`) written BEFORE the `1`/`0` `answer`, then the answers are aggregated to a score in [0,1]. The emitting agent writes `questions[]`, `dimension_scores`, and `failing[]`; the ORCHESTRATOR adds `overall` (see below).
 
 ```json
 {
@@ -206,8 +206,8 @@ BinEval replaces numeric/holistic quality scoring with atomic binary yes/no ques
       "violation_example": "The skill directory has no SKILL.md file.",
       "source": "deterministic",
       "critical": true,
-      "answer": 1,
-      "explanation": "SKILL.md found at the skill root."
+      "explanation": "SKILL.md found at the skill root.",
+      "answer": 1
     },
     {
       "id": "Q-CLARITY-1",
@@ -217,8 +217,8 @@ BinEval replaces numeric/holistic quality scoring with atomic binary yes/no ques
       "violation_example": "Step says 'run validate.py' with no rationale.",
       "source": "llm",
       "critical": false,
-      "answer": 0,
-      "explanation": "The validation step is listed but never motivated."
+      "explanation": "Step 4 says 'run validate.py' and stops there; nothing in the body or references/ says what the validator catches or what breaks when it is skipped, so a reader cannot judge whether the step is optional.",
+      "answer": 0
     }
   ],
   "dimension_scores": {
@@ -252,7 +252,7 @@ BinEval replaces numeric/holistic quality scoring with atomic binary yes/no ques
 - `target`: `"skill-artifact"` (evaluating a skill's files) or `"output"` (evaluating an eval run's output)
 - `skill_name` / `skill_path`: Identify the evaluated skill
 - `eval_id`: Eval id when `target` is `"output"`, otherwise `null`
-- `question_source`: `"hybrid"` (deterministic + generated), `"fixed"` (bank only), or `"generated"` (LLM only)
+- `question_source`: `"hybrid"` (deterministic + fixed bank — skill-artifact scoring), `"fixed"` (bank only), or `"generated"` (per-task questions — output grading)
 - `requirements[]`: Explicit criteria from the two-step meta-prompt's Summarize step; each `{ id, dimension, text }`
 - `questions[]`: Atomic binary questions
   - `id`: `DET-...` for deterministic records (emitted solely by `scripts/eval_skill.py --json`), or `Q-<DIMENSION>-N` for generated/bank questions
@@ -262,10 +262,10 @@ BinEval replaces numeric/holistic quality scoring with atomic binary yes/no ques
   - `violation_example`: A concrete example of the "no" case
   - `source`: `"deterministic"` or `"llm"`
   - `critical`: Whether a "no" answer fails the gate
-  - `answer`: `1` (yes/satisfied) or `0` (no/violated)
-  - `explanation`: Evidence grounding the answer
+  - `explanation`: The critique — evidence grounding the answer. Emitted BEFORE `answer` and written before it
+  - `answer`: `1` (yes/satisfied) or `0` (no/violated), committed only after the critique
 - `dimension_scores`: Per-dimension `{ score, passed, total }`, where `score` = mean of that dimension's answers in [0,1]
-- `overall`:
+- `overall`: **Filled by the ORCHESTRATOR, not by the emitting agent.** The judge is never told the acceptance criteria, so it cannot bias its answers toward them; the orchestrator computes this block from the returned answers.
   - `score`: `(1/N) * sum(all answers)` in [0,1]
   - `passed` / `total`: Count of `1` answers and total questions
   - `display`: Band — `score>=0.90` "production-ready", `0.70-0.89` "solid", `0.50-0.69` "needs-work", `<0.50` "rewrite" (optional 50-pt display = `round(score*50)`)
@@ -463,7 +463,7 @@ Frozen train/held-out split for the gated self-update loop. Located at the works
 
 Output from blind comparator (`agents/comparator.md` emits it). Located at `<grading-dir>/comparison-N.json`.
 
-A and B answer the SAME binary yes/no questions, each WITH evidence. There is NO 1-5 rubric and no holistic 1-9 score. The winner is the side with the higher overall yes-rate; ties break on the critical-dimension yes-rate.
+A and B answer the SAME binary yes/no questions, each side's `explanation` (the critique) written and emitted BEFORE its `answer`. There is NO 1-5 rubric and no holistic 1-9 score. The winner is the side with the higher overall yes-rate; ties break on the critical-dimension yes-rate.
 
 ```json
 {
@@ -474,8 +474,8 @@ A and B answer the SAME binary yes/no questions, each WITH evidence. There is NO
       "text": "Does the output include the date field?",
       "violation_example": "The output omits any date.",
       "critical": false,
-      "A": { "answer": 1, "explanation": "Date '2026-01-15' present in header." },
-      "B": { "answer": 0, "explanation": "No date field anywhere in the output." }
+      "A": { "explanation": "Date '2026-01-15' present in the header field block, matching the source record.", "answer": 1 },
+      "B": { "explanation": "No date in the header, footer, or body; the field was dropped rather than relocated.", "answer": 0 }
     },
     {
       "id": "Q-STRUCT-1",
@@ -483,8 +483,8 @@ A and B answer the SAME binary yes/no questions, each WITH evidence. There is NO
       "text": "Is the output formatted consistently throughout?",
       "violation_example": "Mixed heading styles and inconsistent indentation.",
       "critical": false,
-      "A": { "answer": 1, "explanation": "Uniform headings and spacing." },
-      "B": { "answer": 0, "explanation": "Heading levels jump and indentation varies." }
+      "A": { "explanation": "Heading hierarchy runs H1 → H2 → H3 with no skips; spacing is uniform across sections.", "answer": 1 },
+      "B": { "explanation": "Heading levels jump from H1 to H3 and list indentation shifts between 2 and 4 spaces.", "answer": 0 }
     }
   ],
   "dimensions": {
@@ -515,7 +515,7 @@ A and B answer the SAME binary yes/no questions, each WITH evidence. There is NO
 
 **Fields:**
 
-- `questions[]`: The shared binary questions. Each carries `id`, `dimension`, `text`, `violation_example`, `critical`, and a per-side `{ answer, explanation }` for both `A` and `B`
+- `questions[]`: The shared binary questions. Each carries `id`, `dimension`, `text`, `violation_example`, `critical`, and a per-side `{ explanation, answer }` for both `A` and `B` — critique first, verdict second
 - `dimensions`: Per-dimension yes-rate for each side plus `agreement` (the fraction of that dimension's questions where A and B gave the same answer)
 - `overall`: `{ A, B }` — each side's overall yes-rate across all questions
 - `winner`: The side (`"A"` or `"B"`) with the higher `overall` yes-rate; tiebreak = higher yes-rate on the critical dimensions

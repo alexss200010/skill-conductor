@@ -45,9 +45,11 @@ Tag each question with its dimension (Discovery, Clarity, Structure, Robustness,
 
 Both A and B answer the EXACT same questions — this is what keeps the comparison fair.
 
-### Step 4: Answer the Questions for Each Output
+### Step 4: Critique, Then Answer, for Each Output
 
-For each output (A and B), answer every binary question with 1 (yes) or 0 (no), grounding each answer in concrete evidence from that output. Record an `agreement` flag per question: true when A and B got the same answer, false when they differ. Differing questions are the decisive ones.
+For each output (A and B) and each binary question, write the detailed critique citing concrete evidence from that output BEFORE committing to the 1/0 answer — `A_evidence` before `A`, `B_evidence` before `B`, in that field order in the JSON too. Writing the critique first forces you to articulate the assessment of each side before deciding, which is what keeps the two sides on the same standard. Terse critiques are a defect: the critiques in the example below set the bar.
+
+Then record an `agreement` flag per question: true when A and B got the same answer, false when they differ. Differing questions are the decisive ones.
 
 ### Step 5: Compute Per-Dimension Yes-Rates
 
@@ -80,11 +82,11 @@ Emit `comparison.json` with this structure:
       "text": "Does the output include the date field?",
       "violation_example": "Output omits any date entirely",
       "critical": false,
+      "A_evidence": "Header line 1 carries 'Date: 2026-06-28', matching the date in the source record, and it is rendered in the same field block as the other metadata rather than tacked on",
       "A": 1,
+      "B_evidence": "Searched the header, footer, and body of B: no date in any format. The footer has a page number where A places the date, so the field was dropped, not relocated",
       "B": 0,
-      "agreement": false,
-      "A_evidence": "Date '2026-06-28' present in header",
-      "B_evidence": "No date field anywhere in the document"
+      "agreement": false
     },
     {
       "id": "Q-STRUCT-1",
@@ -92,11 +94,11 @@ Emit `comparison.json` with this structure:
       "text": "Is the output formatted consistently throughout?",
       "violation_example": "Mixed heading styles and broken alignment",
       "critical": false,
+      "A_evidence": "Heading hierarchy runs H1 → H2 → H3 without skips across all 4 sections, and every field label is aligned to the same column",
       "A": 1,
+      "B_evidence": "The header is bold body text rather than a heading, so there is no hierarchy to follow; indentation shifts between 2 and 4 spaces inside the same list",
       "B": 0,
-      "agreement": false,
-      "A_evidence": "Uniform heading hierarchy and aligned fields",
-      "B_evidence": "Header uses bold, body uses inconsistent indentation"
+      "agreement": false
     },
     {
       "id": "Q-COMPLETE-2",
@@ -104,11 +106,11 @@ Emit `comparison.json` with this structure:
       "text": "Is the output a valid PDF?",
       "violation_example": "File is plain text, not PDF",
       "critical": true,
+      "A_evidence": "File starts with the %PDF-1.7 signature and opens to 3 rendered pages",
       "A": 1,
+      "B_evidence": "File starts with the %PDF-1.7 signature and opens to 3 rendered pages",
       "B": 1,
-      "agreement": true,
-      "A_evidence": "Valid PDF signature",
-      "B_evidence": "Valid PDF signature"
+      "agreement": true
     }
   ],
   "dimension_scores": {
@@ -153,9 +155,9 @@ Emit `comparison.json` with this structure:
   - **text**: A single yes/no question
   - **violation_example**: Concrete example of the "no" case
   - **critical**: Whether this question is critical
-  - **A** / **B**: Binary answer (1 = yes, 0 = no) for each output
+  - **A_evidence** / **B_evidence**: The critique grounding each side's answer. Comes BEFORE that side's answer, and is written before it
+  - **A** / **B**: Binary answer (1 = yes, 0 = no) for each output, committed only after that side's critique is written
   - **agreement**: true when A and B share the same answer, false when they differ
-  - **A_evidence** / **B_evidence**: Evidence grounding each answer
 - **dimension_scores**: Per-dimension yes-rates
   - **A** / **B**: Mean of that dimension's answers (in [0,1]) for each output
   - **agreement**: Fraction of that dimension's questions where A and B agreed
@@ -166,6 +168,7 @@ Emit `comparison.json` with this structure:
 
 - **Stay blind**: DO NOT try to infer which skill produced which output. Judge purely on output quality.
 - **Same questions for both**: A and B must answer the identical question set — never tailor questions to one output.
+- **Critique before verdict**: Write `A_evidence` before `A` and `B_evidence` before `B`; a terse critique is a defect.
 - **Evidence per answer**: Every 1/0 must be grounded in a concrete observation from that output.
 - **Be specific**: Cite specific examples in evidence and reasoning.
 - **Be decisive**: TIE only when overall and critical-dimension yes-rates are exactly equal.

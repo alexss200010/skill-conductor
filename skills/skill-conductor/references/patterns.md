@@ -133,3 +133,47 @@ These are the failure modes that actually happen in practice. If you see them in
 | **Synonym cycling**       | template/boilerplate/scaffold for same concept      | Pick one term, use it everywhere                   |
 | **Hidden prerequisites**  | Required tools/envs not mentioned until step 5      | List all prerequisites upfront                     |
 | **Description as manual** | Workflow in description → agent skips body entirely | Description = triggers only. Process lives in body |
+| **Time-sensitive language** | "Before/after \<date\>" rots — the skill is read years later | Current path inline, legacy in a collapsed `<details>` |
+| **Passive reference list**  | A flat "file — purpose" list gets read as trivia, never loaded | Directive trigger at the point of use: what to read, when, what NOT to read |
+
+### Time-sensitive language
+
+A date-conditional instruction stops being an instruction the moment the date passes — the agent has to work out which branch it's in, and it guesses. Write the current path as the only path, and park the old one where it can't be mistaken for live guidance.
+
+```markdown
+# Wrong (rots — "after August 2025" is meaningless in 2027)
+If you're doing this before August 2025, use the old API.
+After August 2025, use the new API.
+
+# Right (current path inline, legacy folded away)
+## Current method
+Use the v2 endpoint: `api.example.com/v2/messages`
+
+<details>
+<summary>Legacy v1 API (deprecated 2025-08)</summary>
+
+The v1 API used `api.example.com/v1/messages`. No longer supported.
+</details>
+```
+
+Same failure class: "the new version", "recently", "the latest release" — all resolve against a date the reader doesn't have.
+
+### Passive reference list
+
+Listing references at the end of SKILL.md tells the agent the files exist. It doesn't tell it to open one. The trigger belongs inside the step that needs the file, and it has to say how much to read and what to skip — a half-read reference is worse than an unread one, because the agent then acts as if it knows.
+
+```markdown
+# Bad (just listed — sits unused)
+## References
+- docx-js.md - for creating documents
+- ooxml.md - for editing
+- redlining.md - for tracking changes
+
+# Good (directive, at the point of use)
+### Creating a new document
+
+**MANDATORY — READ THE ENTIRE FILE:** before proceeding, read `docx-js.md`
+(~500 lines) from start to finish. Never set range limits when reading it.
+
+**Do NOT load** `ooxml.md` or `redlining.md` for this task.
+```

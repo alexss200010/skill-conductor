@@ -21,6 +21,9 @@ Triggers correctly, no false-trigger; description carries purpose + triggers, no
 - `Q-DISCOVERY-1` — non-critical — maps to P2 / axis Discovery
   - text: "Does the description state, in one phrase, what the skill actually does (its purpose) rather than only when to use it?"
   - violation_example: "Description reads 'Use when the user mentions invoices.' — it names a trigger but never says the skill parses and validates invoice PDFs."
+- `Q-DISCOVERY-2` — non-critical — maps to the pushy description pattern
+  - text: "Does the description broaden the trigger surface — 4-5 natural phrasings a user might actually say, and/or a clause like 'even if the user doesn't explicitly say \"<canonical term>\"'?"
+  - violation_example: "Description triggers only on the single canonical term 'dashboard', with no variations ('chart', 'metrics view', 'display our data'), so the skill never fires when the user phrases it any other way."
 
 ---
 
@@ -49,6 +52,9 @@ Unambiguous instructions; explains WHY (TWI); one term per concept; imperative v
 - `Q-CLARITY-5` — non-critical — maps to P9b (imperative voice)
   - text: "Are instructions phrased as imperative commands ('Extract the data') rather than descriptive prose ('the data should be extracted')?"
   - violation_example: "Steps are written as 'you should usually consider extracting', which reads as a suggestion the agent can skip."
+- `Q-CLARITY-6` — non-critical — maps to P10 (no nuance / exemption clauses)
+  - text: "Are the rules free of nuance and exemption clauses ('don't X unless…', 'this doesn't apply to…'), with real exceptions expressed as separate conditionals keyed to observable predicates?"
+  - violation_example: "'Never restate the spec unless it adds clarity.' — the 'unless' reopens the negotiation, so the agent restates the spec and calls it clarifying."
 
 ---
 
@@ -72,6 +78,9 @@ SKILL.md is a map (MOC), token budget respected, references at most 1 level deep
 - `Q-STRUCT-1` — non-critical — maps to P3 (MOC / progressive disclosure)
   - text: "Does SKILL.md delegate heavy detail to references/ instead of inlining it, keeping the body a navigable map?"
   - violation_example: "A 400-line procedure is pasted inline in SKILL.md with no pointer to a references/ file."
+- `Q-STRUCT-2` — non-critical — maps to P3 (loading triggers for references)
+  - text: "Are the reference pointers directive — stating WHEN to read each file and, for skills with 2 or more references, what NOT to load for a given task — rather than a flat 'file — purpose' list?"
+  - violation_example: "The References section is a bare list ('docx-js.md - for creating documents, ooxml.md - for editing'), so the agent either loads all of them or none."
 
 ---
 
@@ -96,6 +105,9 @@ Handles edge cases; pre-flight checks; scripts error-handle; no secrets/env/keys
 - `Q-ROBUST-3` — non-critical — maps to axis Robustness (scripts error-handle)
   - text: "Do bundled scripts handle errors and return descriptive stdout/stderr on failure rather than failing silently? (If the skill bundles no scripts, answer 1 — vacuously satisfied.)"
   - violation_example: "A bundled script exits 0 with empty output when its input is malformed, hiding the failure from the caller."
+- `Q-ROBUST-4` — non-critical — maps to the time-rot anti-pattern
+  - text: "Is the skill free of time-sensitive language ('before/after <date>', 'the new API', 'currently') that rots, with legacy information separated from the current path (e.g. in a collapsed details block)?"
+  - violation_example: "'If you're doing this before August 2025, use the old API.' — a year later the agent cannot tell which branch is current."
 
 ---
 
@@ -118,6 +130,9 @@ Covers the stated use cases; written from real practice; inline checklists at ri
 - `Q-COMPLETE-3` — non-critical — maps to P7 (inline checklists at risk points)
   - text: "Are short checklists placed inline at the risk step rather than collected in one section at the end of the document?"
   - violation_example: "All quality checks live in a 'QA' section at the bottom; the agent finishes the steps above and never reaches it."
+- `Q-COMPLETE-4` — non-critical — maps to P9 (E:A:R — no Redundant content)
+  - text: "Is the skill free of Redundant content — sections explaining what the model already knows (basic concepts, common library usage, generic best practices)?"
+  - violation_example: "The body opens with a 'What is JSON' section and a tutorial on standard `requests` usage, spending tokens on knowledge the model already has."
 
 ---
 
@@ -128,4 +143,4 @@ Covers the stated use cases; written from real practice; inline checklists at ri
 - Display bands: `S>=0.90` production-ready · `0.70-0.89` solid · `0.50-0.69` needs-work · `<0.50` rewrite. Optional 50-pt display = `round(S*50)`.
 - GATE = every CRITICAL question (deterministic + critical bank questions) answered `1`. The gate is the pass criterion, not the scalar; subjective llm questions are non-critical by design.
 
-bank-version: 1.0
+bank-version: 1.1

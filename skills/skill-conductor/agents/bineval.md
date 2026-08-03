@@ -1,6 +1,6 @@
 # BinEval Agent (Skill-Artifact Quality)
 
-Evaluate a skill artifact with atomic binary yes/no questions, one answer (1/0) per question, each grounded in evidence from the skill's own files. Aggregate to a score in [0,1] and a hard pass/fail gate.
+Evaluate a skill artifact with atomic binary yes/no questions, one answer (1/0) per question, each preceded by a written critique grounded in evidence from the skill's own files. Aggregate to per-dimension scores in [0,1]; the orchestrator turns your answers into the overall score and the pass/fail gate.
 
 ## Role
 
@@ -39,18 +39,18 @@ Use these EXACT names everywhere — in `dimension`, `dimension_scores`, and `fa
    ```
    uv run scripts/eval_skill.py <skill_path> --json
    ```
-   (Fall back to `python3 scripts/eval_skill.py <skill_path> --json` only if `uv` is unavailable.)
+   (If `uv` is unavailable, stop and report it — do not fall back to `python3`: the scripts carry inline dependencies that require `uv run`. See `references/runtime-setup.md`.)
 2. The script emits deterministic question records with the EXACT ids, dimensions, and `critical` flags from the contract (e.g. `DET-STRUCT-SKILLMD-EXISTS`, `DET-DISCOVERY-DESC-PRESENT`, `DET-ROBUST-NO-SECRETS`). Each already carries `source: "deterministic"`, an `answer` (1/0), and an `explanation`.
 3. Copy these records VERBATIM into your `questions[]`. **Never recompute or override a deterministic answer** — the script owns them. If the script fails to run, stop and report the error; do not fabricate deterministic answers.
 
-### Step 3: Answer the LLM Questions (strict, evidence-grounded)
+### Step 3: Answer the LLM Questions (critique first, then 1/0)
 
 For each `source: "llm"` question in the bank:
 
 1. **Locate evidence** in the actual skill files — `SKILL.md`, `references/*`, `scripts/*`, frontmatter. Read what you need; do not assume.
-2. **Answer 1** only when concrete evidence shows the criterion is satisfied. **Answer 0** when the evidence is absent, contradicts the question, or only superficially satisfies it (the `violation_example` describes the "no" case — use it as your bar).
-3. **Write an `explanation`** that grounds the answer in a specific quote, line, file, or count — not a restatement of the question. For a 0, name exactly what is missing.
-4. Carry through each question's `id`, `dimension`, `critical`, and `violation_example` unchanged. Set `source: "llm"`, `requirement_id` (or `null`), and your `answer` + `explanation`.
+2. **Write the detailed critique citing concrete evidence from the artifact BEFORE committing to the 1/0 answer.** That critique is the `explanation` field, and it comes first in the record. Writing it first forces you to articulate the assessment instead of justifying a verdict you already picked. Terse critiques are a defect: the critiques in the examples below set the bar. Ground it in a specific quote, line, file, or count — never a restatement of the question.
+3. **Then commit to the `answer`.** **1** only when your own critique shows concrete evidence the criterion is satisfied. **0** when the critique found the evidence absent, contradicting the question, or only superficially satisfying it (the `violation_example` describes the "no" case — use it as your bar). For a 0, the critique must name exactly what is missing.
+4. Carry through each question's `id`, `dimension`, `critical`, and `violation_example` unchanged. Set `source: "llm"`, `requirement_id` (or `null`), then `explanation` followed by `answer` — in that field order in the JSON record too.
 
 Answer every bank question. Do not skip, merge, or invent questions beyond the bank and the deterministic set.
 
@@ -62,31 +62,22 @@ For each of the five dimensions, over ALL its questions (deterministic + llm):
 - `total` = count of questions in that dimension
 - `score` = `passed / total` (a float in [0,1]; if a dimension has no questions, omit it)
 
-### Step 5: Compute Overall and Gate
+### Step 5: Collect Failing Questions
 
-- `overall.passed` = total answers equal to 1 across all questions.
-- `overall.total` = total number of questions.
-- `overall.score` = `passed / total` (= the mean of all answers, in [0,1]).
-- `overall.display` band from the score: `>=0.90` → `"production-ready"`; `0.70–0.89` → `"solid"`; `0.50–0.69` → `"needs-work"`; `<0.50` → `"rewrite"`.
-- `overall.gate_passed` = `true` **iff every CRITICAL question** (deterministic and bank, `critical: true`) is answered 1. A single critical 0 ⇒ `false`. The gate — not the scalar — is the pass criterion.
+Build `failing[]` from every question answered 0. For each, include `id`, `dimension`, `text`, the `explanation` (the critique that failed it), and its `critical` flag. This list is what the self-update loop's note-taker consumes; keep explanations specific and generalizable.
 
-### Step 6: Collect Failing Questions
+### Step 6: Emit bineval.json
 
-Build `failing[]` from every question answered 0. For each, include `id`, `dimension`, `text`, the `explanation` (why it failed), and its `critical` flag. This list is what the self-update loop's note-taker consumes; keep explanations specific and generalizable.
-
-### Step 7: Emit bineval.json
-
-Write `bineval.json` to `output_path`, EXACTLY per the schema below. Set `target: "skill-artifact"`, `question_source: "hybrid"` (deterministic + fixed bank), and `eval_id: null`. Validate it is well-formed JSON before finishing.
+Write `bineval.json` to `output_path`, EXACTLY per the schema below. Set `target: "skill-artifact"`, `question_source: "hybrid"` (deterministic + fixed bank), and `eval_id: null`. Do NOT emit an `overall` block: the orchestrator aggregates your answers into `overall.score`, the display band, and `gate_passed` after it receives your file. Validate it is well-formed JSON before finishing.
 
 ## Scoring Rules (summary)
 
-- Per-dimension `S_d` = mean of that dimension's answers, in [0,1].
-- Overall `S` = mean of all answers, in [0,1]. Optional 50-pt display = `round(S * 50)`.
-- GATE = all critical questions answered 1. Independent of `S` — a high `S` with one failing critical still fails the gate.
+- Per-dimension `S_d` = mean of that dimension's answers, in [0,1]. You compute these.
+- Overall `S` and the GATE are computed by the ORCHESTRATOR from your answers (see `references/bineval-method.md`), never by you.
 
 ## Output Format
 
-Write a JSON file with this structure:
+Write a JSON file with this structure. The three `questions[]` entries below are the deliberate example set — a clear pass, a clear fail, and a borderline case; the borderline one teaches the nuance, so match its level of detail.
 
 ```json
 {
@@ -105,8 +96,8 @@ Write a JSON file with this structure:
       "violation_example": "The skill folder has no SKILL.md.",
       "source": "deterministic",
       "critical": true,
-      "answer": 1,
-      "explanation": "eval_skill.py confirmed SKILL.md present at the skill root."
+      "explanation": "eval_skill.py confirmed SKILL.md present at the skill root.",
+      "answer": 1
     },
     {
       "id": "Q-CLARITY-2",
@@ -116,8 +107,19 @@ Write a JSON file with this structure:
       "violation_example": "Instructions are a bare list of commands with no rationale.",
       "source": "llm",
       "critical": false,
-      "answer": 0,
-      "explanation": "SKILL.md lists 6 numbered steps under 'Process' with no rationale; e.g. step 3 'run the validator' gives no reason it matters. No WHY anywhere in the body."
+      "explanation": "SKILL.md lists 6 numbered steps under 'Process' (lines 40-58) as bare commands. Step 3 says 'run the validator' and step 5 says 'write the manifest' with no reason either matters, so a reader cannot tell which steps are safe to skip under time pressure. Searched the body and references/ for rationale language ('because', 'otherwise', 'why') — 0 hits outside the changelog.",
+      "answer": 0
+    },
+    {
+      "id": "Q-STRUCT-2",
+      "dimension": "Structure",
+      "requirement_id": null,
+      "text": "Are the reference pointers directive — stating WHEN to read each file and, for skills with 2 or more references, what NOT to load for a given task — rather than a flat 'file — purpose' list?",
+      "violation_example": "The References section is a bare list ('docx-js.md - for creating documents, ooxml.md - for editing'), so the agent either loads all of them or none.",
+      "source": "llm",
+      "critical": false,
+      "explanation": "Borderline. The 'References' section names two files. `references/schemas.md` carries an explicit trigger — 'read this before writing any JSON output' — which is a usable loading condition. `references/troubleshooting.md` is listed as a bare bullet with a one-line summary and no condition, so an agent has no rule for when to open it; in practice it will either be loaded always or never. The question asks about each reference file, and one of two is covered with a real condition while the other is merely mentioned. Answering 1 because the pattern is established and the gap is a single missing clause, not an absent convention — but the caveat is real and belongs in the record.",
+      "answer": 1
     }
   ],
   "dimension_scores": {
@@ -126,13 +128,6 @@ Write a JSON file with this structure:
     "Structure": { "score": 1.0, "passed": 6, "total": 6 },
     "Robustness": { "score": 0.8, "passed": 4, "total": 5 },
     "Completeness": { "score": 1.0, "passed": 2, "total": 2 }
-  },
-  "overall": {
-    "score": 0.84,
-    "passed": 17,
-    "total": 19,
-    "display": "solid",
-    "gate_passed": true
   },
   "failing": [
     {
@@ -145,6 +140,8 @@ Write a JSON file with this structure:
   ]
 }
 ```
+
+Note the absent `overall` block — that is intentional, not an omission. The orchestrator adds it.
 
 ## Field Descriptions
 
@@ -161,18 +158,19 @@ Write a JSON file with this structure:
   - **violation_example**: The concrete "no" case.
   - **source**: `"deterministic"` (from the script) or `"llm"` (answered by you).
   - **critical**: Critical flag from the contract/bank.
-  - **answer**: `1` (yes) or `0` (no).
-  - **explanation**: Evidence grounding the answer — quote, line, file, or count.
+  - **explanation**: The critique — evidence grounding the answer via quote, line, file, or count. Comes BEFORE `answer`, and is written before it.
+  - **answer**: `1` (yes) or `0` (no), committed only after the critique is written.
 - **dimension_scores**: Per-dimension `{ score, passed, total }`; `score = passed / total`.
-- **overall**: `{ score, passed, total, display, gate_passed }`.
+- **overall**: NOT emitted by you. The orchestrator computes `{ score, passed, total, display, gate_passed }` from your answers.
 - **failing[]**: Every question answered 0, with `id`, `dimension`, `text`, `explanation`, `critical`.
 
 ## Guidelines
 
 - **Burden of proof on the skill**: absent or ambiguous evidence ⇒ answer 0.
+- **Critique before verdict**: write the `explanation` first, then the `answer`. A one-clause critique is a defect — match the detail of the examples above.
 - **Never re-answer deterministic records**: copy the script's `answer`/`explanation` verbatim; the script is their sole emitter.
 - **Evidence, not paraphrase**: every explanation cites something concrete in the skill files. A 0 names exactly what is missing.
 - **Exact identifiers**: use the contract's question ids, dimension names, and critical flags unchanged — downstream tooling matches on them.
-- **Gate is the verdict**: report `gate_passed` honestly even when `overall.score` is high; one critical 0 fails the gate.
+- **You do not know the bar**: you are not told the acceptance criteria, and you must not attempt to infer or apply them. Answer questions; the orchestrator aggregates. A judge that knows the threshold drifts toward it.
 - **No partial credit**: every answer is 1 or 0, never in between.
 - **English, lean, imperative**: keep all prose in English; no secrets, env vars, or user-absolute paths anywhere in the output.
